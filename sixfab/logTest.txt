@@ -1,0 +1,101 @@
+Sixfab Raspberry Pi Cellular IoT Shield Class initialized!
+Power up sequence - disabling first
+BG96 module disabled!
+Disable done
+
+Starting enable
+BG96 module enabled!
+Enable done
+
+Starting power up
+BG96 module powered up!
+Power up done
+
+Sending ATE1 command
+ATE1
+ATE1
+
+OK
+
+Getting IMEI
+AT+CGSN
+AT+CGSN
+866425039280757
+
+OK
+
+
+Getting Firmware
+AT+CGMR
+AT+CGMR
+BG96MAR02A07M1G
+
+OK
+
+Getting HW Info
+AT+CGMM
+AT+CGMM
+BG96
+
+OK
+
+Turning GNSS on
+AT+QGPS=1
+AT+QGPS=1
+OK
+
+Starting loop
+ATE0
+ATE0
+OK
+
+AT+QGPSLOC=2
+
++CME ERROR: 516
+
+0
+ATE0
+
+OK
+
+AT+QGPSLOC=2
+
++CME ERROR: 516
+
+0
+ATE0
+
+OK
+
+AT+QGPSLOC=2
+
++CME ERROR: 516
+
+0
+ATE0
+
+OK
+
+AT+QGPSLOC=2
+
++CME ERROR: 516
+
+0
+ATE0
+
+OK
+
+AT+QGPSLOC=2
+
++CME ERROR: 516
+
+0
+ATE0
+
+Exited loop, will turn GNSS off and quit.
+AT+QGPSEND
+
+OK
+
+Done. Quiting.
+
