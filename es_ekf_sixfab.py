@@ -1,116 +1,168 @@
-###############################
-### *********************** ###
-### Author: Marc Leroy      ###
-### Last update: 06/13/2019 ###
-### *********************** ###
-###############################
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
 
-import RTIMU
-import os.path
+""" es_ekf_sixfab.py
+Runs an ES-EKF for GNSS / IMU combination (BG96+LSM9DS1).
+Run as is, but be aware this code is work in progress.
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program. If not, see <http://www.gnu.org/licenses/>.
+"""
+__authors__ = ["Miguel Baquero",
+               "Matthew Franklin",
+               "Lazare Girardin",
+               "Marc Leroy"]
+__contact__ = "construction.tech@pix4d.com"
+__copyright__ = "Copyright 2019, Pix4D"
+__credits__ = ["Miguel Baquero",
+               "Matthew Franklin",
+               "Lazare Girardin",
+               "Marc Leroy"]
+__date__ = "2019/06/13"
+__deprecated__ = False
+__email__ = "construction.tech@pix4d.com"
+__license__ = "GPLv3"
+__maintainer__ = "Crane Camera R&D Team"
+__status__ = "Production"
+__version__ = "0.0.1"
+
 import numpy as np
+import os.path
+import RTIMU
 import time
 import sys
-np.set_printoptions(precision=4, suppress=True,sign='+', linewidth=204)
 import os
+
 from cellulariot import cellulariot
 
-#######################################################################################################################
-#######################################################################################################################
-### GPS CONVERSION FUNCTIONS                                                                                        ###
-#######################################################################################################################
-#######################################################################################################################
+np.set_printoptions(precision=4, suppress=True, sign='+', linewidth=204)
 
-def geodetic2ecef(lat,lon,alt):
-    """ Valid for Earth as using its semimajor axis and first eccentricity squared """
-    """ Input: world coordinates in [rad, altitude in [m]]                         """
-    """ Output: np.array of size (3,1)                                             """
-    xi = 1./np.sqrt(1. - 6.69437999014*0.001 * np.sin(lat) * np.sin(lat))
+""" ------------------------------------------------- GPS CONVERSION FUNCTIONS.
+"""
+def geodetic2ecef(lat, lon, alt):
+    """Converts Geodetic coordinates to ECEF on Earth.
 
-    ecef = np.zeros((3,1), dtype=np.float)
-    
-    ecef[0,0] = (6378137*xi + alt) * np.cos(lat) * np.cos(lon) 
-    ecef[1,0] = (6378137*xi + alt) * np.cos(lat) * np.sin(lon)
-    ecef[2,0] = (6378137*xi * (1. - 6.69437999014*0.001) + alt) * np.sin(lat)
-    
+    Args:
+        lat (float): Latitude in [rad]
+        lon (float): Longitude in [rad]
+        alt (float): Altitude in [m]
+
+    Returns:
+        np.ndarray((3, 1), dtype='float64'): ECEF coordinates
+    """
+    xi = 1./np.sqrt(1. - 0.00669437999014 * np.sin(lat) * np.sin(lat))
+
+    ecef = np.zeros((3, 1), dtype=np.float)
+
+    ecef[0, 0] = (6378137*xi + alt) * np.cos(lat) * np.cos(lon)
+    ecef[1, 0] = (6378137*xi + alt) * np.cos(lat) * np.sin(lon)
+    ecef[2, 0] = (6378137*xi * (1. - 0.00669437999014) + alt) * np.sin(lat)
+
     return ecef
 
-def ecef2ned(pLat, pLon, pAlt, initEcef, ecef2nedMat):
-    """ Self-explanatory                                                                                     """
-    """ Input: world coordinates in [rad], initial frame coordinates in ECEF model and NED conversion matrix """
-    """ Output: np.array of size (3,1)                                                                       """
-    xyz = geodetic2ecef(pLat,pLon,pAlt)
+def ecef2ned(p_lat, p_lon, p_alt, init_ecef, ecef2ned_mat):
+    """Converts ECEF coordinates to local NED coordinates.
 
-    v      = np.zeros((3,1), dtype=np.float)
-    v[0,0] = xyz[0,0] - initEcef[0,0]
-    v[1,0] = xyz[1,0] - initEcef[1,0]
-    v[2,0] = xyz[2,0] - initEcef[2,0]
+    Args:
+        p_lat (float): Latitude in [rad]
+        p_lon (float): Longitude in [rad]
+        p_alt (float): Altitude in [m]
+        init_ecef ([type]): Initial frame coordinates in ECEF model
+        ecef2ned_mat ([type]): Matrix that converts ECEF coords to NED
 
-    ret      =  ecef2nedMat @ v
-    ret[2,0] = -ret[2,0]
+    Returns:
+        np.ndarray((3,1), dtype='float64'): NED coordinates
+    """
+    xyz = geodetic2ecef(p_lat, p_lon, p_alt)
+
+    v = np.zeros((3, 1), dtype=np.float)
+    v[0, 0] = xyz[0, 0] - init_ecef[0, 0]
+    v[1, 0] = xyz[1, 0] - init_ecef[1, 0]
+    v[2, 0] = xyz[2, 0] - init_ecef[2, 0]
+
+    ret = ecef2ned_mat @ v
+    ret[2, 0] = -ret[2, 0]
 
     return ret
 
-def ned2geodetic(ned, initEcef, ned2ecefMat):
-    """Converts NED coordinates to Geodetic
-    
+def ned2geodetic(ned, init_ecef, ned2ecef_mat):
+    """Converts NED coordinates to Geodetic.
+
     Args:
         ned ([type]): [description]
-        initEcef ([type]): [description]
-        ned2ecefMat ([type]): [description]
-    
+        init_ecef ([type]): [description]
+        ned2ecef_mat ([type]): [description]
+
     Returns:
         [type]: [description]
     """
-    v    = np.array([ned[0,0], ned[1,0], -ned[2,0]]).reshape(3,1)
-    xyz  = ned2ecefMat @ v
-    xyz += initEcef
+    v = np.array([ned[0, 0], ned[1, 0], -ned[2, 0]]).reshape(3, 1)
+    xyz = ned2ecef_mat @ v
+    xyz += init_ecef
 
-    x = xyz[0,0]
-    y = xyz[1,0]
-    z = xyz[2,0]
+    x = xyz[0, 0]
+    y = xyz[1, 0]
+    z = xyz[2, 0]
 
-    kSemimajorAxis             = 6378137
-    kSemiminorAxis             = 6356752.3142
-    kFirstEccentricitySquared  = 6.69437999014*0.001
-    kSecondEccentricitySquared = 6.73949674228*0.001
+    k_semimajor_axis = 6378137
+    k_semiminor_axis = 6356752.3142
+    first_ecc_sq = 0.00669437999014
+    second_ecc_sq = 0.00673949674228
 
-    r   = np.sqrt(((xyz[0,0])**2) + ((xyz[1,0])**2))
-    Esq = kSemimajorAxis**2 - kSemiminorAxis**2
-    F   = 54. * kSemiminorAxis**2 * xyz[2,0]**2
-    G   = r**2 + (1. - kFirstEccentricitySquared) * xyz[2,0]**2 - kFirstEccentricitySquared * Esq
-    C   = (kFirstEccentricitySquared**2 * F * r**2) / (G**3)
-    S   = (1 + C + np.sqrt(C**2 + 2.*C))**(1./3.)
-    P   = F/(3.*((S + 1./S + 1.)**2)*G**2)
-    Q   = np.sqrt(1. + 2.*kFirstEccentricitySquared**2 * P)
-    r_0 = -(P*r*kFirstEccentricitySquared) / (1.+Q) + np.sqrt( 0.5*(1.+1./Q)*(kSemimajorAxis**2) - P * (1.-kFirstEccentricitySquared) * xyz[2,0]**2 / (Q*(1.+Q)) - 0.5*P*(r**2) )
-    U   = np.sqrt( ((r-kFirstEccentricitySquared*r_0)**2) + xyz[2,0]**2 )
-    V   = np.sqrt( ((r-kFirstEccentricitySquared*r_0)**2) + (1.-kFirstEccentricitySquared) * xyz[2,0]**2 )
-    Z_0 = kSemiminorAxis**2 * xyz[2,0] / (kSemimajorAxis * V)
-    lat = np.degrees(np.arctan((xyz[2,0]+kSecondEccentricitySquared*Z_0)/r))
-    lon = np.degrees(np.arctan2(xyz[1,0],xyz[0,0]))
-    alt = U * ( 1.- (kSemiminorAxis**2)/(kSemimajorAxis*V) )
-    
-    return np.array([[lat],[lon],[alt]])
+    r = np.sqrt(((xyz[0, 0])**2) + ((xyz[1, 0])**2))
+    k_esq = k_semimajor_axis**2 - k_semiminor_axis**2
+    k_f = 54. * k_semiminor_axis**2 * xyz[2, 0]**2
+    k_g = (r**2
+           + (1. - first_ecc_sq) * xyz[2, 0]**2
+           - first_ecc_sq * k_esq)
+    k_c = (first_ecc_sq**2 * k_f * r**2) / (k_g**3)
+    k_s = (1 + k_c + np.sqrt(k_c**2 + 2.*k_c))**(1./3.)
+    k_p = k_f / (3. * ((k_s + 1./k_s + 1.)**2) * k_g**2)
+    k_q = np.sqrt(1. + 2.*first_ecc_sq**2 * k_p)
+    r_0 = -(k_p*r*first_ecc_sq) / (1.+k_q) + np.sqrt(0.5*(1.+1./k_q)*(k_semimajor_axis**2) - k_p * (1.-first_ecc_sq) * xyz[2, 0]**2 / (k_q*(1.+k_q)) - 0.5*k_p*(r**2))
+    k_u = np.sqrt(((r-first_ecc_sq*r_0)**2) + xyz[2, 0]**2)
+    k_v = np.sqrt(((r-first_ecc_sq*r_0)**2) + (1.-first_ecc_sq) * xyz[2, 0]**2)
+    z_0 = k_semiminor_axis**2 * xyz[2, 0] / (k_semimajor_axis * k_v)
+    lat = np.degrees(np.arctan((xyz[2, 0] + second_ecc_sq*z_0)/r))
+    lon = np.degrees(np.arctan2(xyz[1, 0], xyz[0, 0]))
+    alt = k_u * (1.- (k_semiminor_axis**2)/(k_semimajor_axis*k_v))
+
+    return np.array([[lat], [lon], [alt]])
 
 def nRe(lat, lon):
-    """ Returns the ecef2ned matrix       """
-    """ Input: world coordinates in [rad] """
-    """ Output: np.array of size(3,3)     """
-    sLat = np.sin(lat)
-    sLon = np.sin(lon)
-    cLat = np.cos(lat)
-    cLon = np.cos(lon)
+    """Computes the ECEF coordinates to local NED matrix.
 
-    ret = np.zeros((3,3), dtype=np.float)
-    ret[0,0] = -sLat * cLon
-    ret[0,1] = -sLat * sLon
-    ret[0,2] =  cLat
-    ret[1,0] = -sLon
-    ret[1,1] =  cLon
-    ret[1,2] =  0.
-    ret[2,0] =  cLat * cLon
-    ret[2,1] =  cLat * sLon
-    ret[2,2] =  sLat
+    Args:
+        lat (float): Latitude in [rad]
+        lon (float): Longitude in [rad]
+
+    Returns:
+        np.ndarray((3, 3), dtype='float64'): ECEF to local NED matrix
+    """
+    s_lat = np.sin(lat)
+    s_lon = np.sin(lon)
+    c_lat = np.cos(lat)
+    c_lon = np.cos(lon)
+
+    ret = np.zeros((3, 3), dtype=np.float)
+    ret[0, 0] = -s_lat * c_lon
+    ret[0, 1] = -s_lat * s_lon
+    ret[0, 2] = c_lat
+    ret[1, 0] = -s_lon
+    ret[1, 1] = c_lon
+    ret[1, 2] = 0.
+    ret[2, 0] = c_lat * c_lon
+    ret[2, 1] = c_lat * s_lon
+    ret[2, 2] = s_lat
 
     return ret
 
@@ -120,8 +172,17 @@ def nRe(lat, lon):
 ### GEOMETRIC FUNCTIONS (EULER, DCM, QUAT, ETC)                                                                     ###
 #######################################################################################################################
 #######################################################################################################################
-
-def compRotMatFromRPY(r,p,y):
+def compRotMatFromRPY(r, p, y):
+    """Computes rotation matrix from roll, pitch and yaw values
+    
+    Args:
+        r (float): roll in [rad]
+        p (float): pitch in [rad]
+        y (float): yaw in [rad]
+    
+    Returns:
+        np.ndarray((3, 3), dtype='float64'): Rotation matrix
+    """
     return np.array([ [np.cos(p)*np.cos(y), np.sin(r)*np.sin(p)*np.cos(y) - np.sin(y)*np.cos(r),  np.sin(r)*np.sin(y) + np.sin(p)*np.cos(r)*np.cos(y)],
                       [np.sin(y)*np.cos(p), np.sin(r)*np.sin(p)*np.sin(y) + np.cos(r)*np.cos(y), -np.sin(r)*np.cos(y) + np.sin(p)*np.sin(y)*np.cos(r)],
                       [         -np.sin(p),                                 np.sin(r)*np.cos(p),                                  np.cos(r)*np.cos(p)] ])
