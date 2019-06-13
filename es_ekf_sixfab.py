@@ -35,19 +35,23 @@ __maintainer__ = "Crane Camera R&D Team"
 __status__ = "Production"
 __version__ = "0.0.1"
 
-import numpy as np
-import os.path
-import RTIMU
-import time
-import sys
 import os
+import os.path
+import sys
+import time
+
+import RTIMU
+
+import numpy as np
 
 from cellulariot import cellulariot
 
 np.set_printoptions(precision=4, suppress=True, sign='+', linewidth=204)
 
-""" ------------------------------------------------- GPS CONVERSION FUNCTIONS.
-"""
+
+# GPS CONVERSION FUNCTIONS.
+
+
 def geodetic2ecef(lat, lon, alt):
     """Converts Geodetic coordinates to ECEF on Earth.
 
@@ -59,15 +63,16 @@ def geodetic2ecef(lat, lon, alt):
     Returns:
         np.ndarray((3, 1), dtype='float64'): ECEF coordinates
     """
-    xi = 1./np.sqrt(1. - 0.00669437999014 * np.sin(lat) * np.sin(lat))
+    x_i = 1./np.sqrt(1. - 0.00669437999014 * np.sin(lat) * np.sin(lat))
 
     ecef = np.zeros((3, 1), dtype=np.float)
 
-    ecef[0, 0] = (6378137*xi + alt) * np.cos(lat) * np.cos(lon)
-    ecef[1, 0] = (6378137*xi + alt) * np.cos(lat) * np.sin(lon)
-    ecef[2, 0] = (6378137*xi * (1. - 0.00669437999014) + alt) * np.sin(lat)
+    ecef[0, 0] = (6378137*x_i + alt) * np.cos(lat) * np.cos(lon)
+    ecef[1, 0] = (6378137*x_i + alt) * np.cos(lat) * np.sin(lon)
+    ecef[2, 0] = (6378137*x_i * (1. - 0.00669437999014) + alt) * np.sin(lat)
 
     return ecef
+
 
 def ecef2ned(p_lat, p_lon, p_alt, init_ecef, ecef2ned_mat):
     """Converts ECEF coordinates to local NED coordinates.
@@ -84,15 +89,16 @@ def ecef2ned(p_lat, p_lon, p_alt, init_ecef, ecef2ned_mat):
     """
     xyz = geodetic2ecef(p_lat, p_lon, p_alt)
 
-    v = np.zeros((3, 1), dtype=np.float)
-    v[0, 0] = xyz[0, 0] - init_ecef[0, 0]
-    v[1, 0] = xyz[1, 0] - init_ecef[1, 0]
-    v[2, 0] = xyz[2, 0] - init_ecef[2, 0]
+    vect = np.zeros((3, 1), dtype=np.float)
+    vect[0, 0] = xyz[0, 0] - init_ecef[0, 0]
+    vect[1, 0] = xyz[1, 0] - init_ecef[1, 0]
+    vect[2, 0] = xyz[2, 0] - init_ecef[2, 0]
 
-    ret = ecef2ned_mat @ v
+    ret = ecef2ned_mat @ vect
     ret[2, 0] = -ret[2, 0]
 
     return ret
+
 
 def ned2geodetic(ned, init_ecef, ned2ecef_mat):
     """Converts NED coordinates to Geodetic.
@@ -105,40 +111,45 @@ def ned2geodetic(ned, init_ecef, ned2ecef_mat):
     Returns:
         [type]: [description]
     """
-    v = np.array([ned[0, 0], ned[1, 0], -ned[2, 0]]).reshape(3, 1)
-    xyz = ned2ecef_mat @ v
+    vect = np.array([ned[0, 0], ned[1, 0], -ned[2, 0]]).reshape(3, 1)
+    xyz = ned2ecef_mat @ vect
     xyz += init_ecef
 
-    x = xyz[0, 0]
-    y = xyz[1, 0]
-    z = xyz[2, 0]
+    # x = xyz[0, 0]
+    # y = xyz[1, 0]
+    # z = xyz[2, 0]
 
     k_semimajor_axis = 6378137
     k_semiminor_axis = 6356752.3142
     first_ecc_sq = 0.00669437999014
     second_ecc_sq = 0.00673949674228
 
-    r = np.sqrt(((xyz[0, 0])**2) + ((xyz[1, 0])**2))
+    k_r = np.sqrt(((xyz[0, 0])**2) + ((xyz[1, 0])**2))
     k_esq = k_semimajor_axis**2 - k_semiminor_axis**2
     k_f = 54. * k_semiminor_axis**2 * xyz[2, 0]**2
-    k_g = (r**2
+    k_g = (k_r**2
            + (1. - first_ecc_sq) * xyz[2, 0]**2
            - first_ecc_sq * k_esq)
-    k_c = (first_ecc_sq**2 * k_f * r**2) / (k_g**3)
+    k_c = (first_ecc_sq**2 * k_f * k_r**2) / (k_g**3)
     k_s = (1 + k_c + np.sqrt(k_c**2 + 2.*k_c))**(1./3.)
     k_p = k_f / (3. * ((k_s + 1./k_s + 1.)**2) * k_g**2)
     k_q = np.sqrt(1. + 2.*first_ecc_sq**2 * k_p)
-    r_0 = -(k_p*r*first_ecc_sq) / (1.+k_q) + np.sqrt(0.5*(1.+1./k_q)*(k_semimajor_axis**2) - k_p * (1.-first_ecc_sq) * xyz[2, 0]**2 / (k_q*(1.+k_q)) - 0.5*k_p*(r**2))
-    k_u = np.sqrt(((r-first_ecc_sq*r_0)**2) + xyz[2, 0]**2)
-    k_v = np.sqrt(((r-first_ecc_sq*r_0)**2) + (1.-first_ecc_sq) * xyz[2, 0]**2)
+    r_0 = (- (k_p*k_r*first_ecc_sq) / (1.+k_q)
+           + np.sqrt(0.5*(1.+1./k_q)*(k_semimajor_axis**2)
+                     - k_p * (1.-first_ecc_sq) * xyz[2, 0]**2 / (k_q*(1.+k_q))
+                     - 0.5*k_p*(k_r**2)))
+    k_u = np.sqrt(((k_r-first_ecc_sq*r_0)**2) + xyz[2, 0]**2)
+    k_v = np.sqrt(((k_r-first_ecc_sq*r_0)**2)
+                  + (1.-first_ecc_sq) * xyz[2, 0]**2)
     z_0 = k_semiminor_axis**2 * xyz[2, 0] / (k_semimajor_axis * k_v)
-    lat = np.degrees(np.arctan((xyz[2, 0] + second_ecc_sq*z_0)/r))
+    lat = np.degrees(np.arctan((xyz[2, 0] + second_ecc_sq*z_0)/k_r))
     lon = np.degrees(np.arctan2(xyz[1, 0], xyz[0, 0]))
-    alt = k_u * (1.- (k_semiminor_axis**2)/(k_semimajor_axis*k_v))
+    alt = k_u * (1. - (k_semiminor_axis**2)/(k_semimajor_axis*k_v))
 
     return np.array([[lat], [lon], [alt]])
 
-def nRe(lat, lon):
+
+def comp_ecef_to_ned_mat(lat, lon):
     """Computes the ECEF coordinates to local NED matrix.
 
     Args:
@@ -167,266 +178,402 @@ def nRe(lat, lon):
     return ret
 
 
-#######################################################################################################################
-#######################################################################################################################
-### GEOMETRIC FUNCTIONS (EULER, DCM, QUAT, ETC)                                                                     ###
-#######################################################################################################################
-#######################################################################################################################
-def compRotMatFromRPY(r, p, y):
+# GEOMETRIC FUNCTIONS (EULER, DCM, QUAT, ETC).
+
+
+def comp_rot_mat_from_rpy(roll, pitch, yaw):
     """Computes rotation matrix from roll, pitch and yaw values
-    
+
     Args:
-        r (float): roll in [rad]
-        p (float): pitch in [rad]
-        y (float): yaw in [rad]
-    
+        roll (float): roll in [rad]
+        pitch (float): pitch in [rad]
+        yaw (float): yaw in [rad]
+
     Returns:
-        np.ndarray((3, 3), dtype='float64'): Rotation matrix
+        np.ndarray((3, 3), dtype='float64'): rotation matrix
     """
-    return np.array([ [np.cos(p)*np.cos(y), np.sin(r)*np.sin(p)*np.cos(y) - np.sin(y)*np.cos(r),  np.sin(r)*np.sin(y) + np.sin(p)*np.cos(r)*np.cos(y)],
-                      [np.sin(y)*np.cos(p), np.sin(r)*np.sin(p)*np.sin(y) + np.cos(r)*np.cos(y), -np.sin(r)*np.cos(y) + np.sin(p)*np.sin(y)*np.cos(r)],
-                      [         -np.sin(p),                                 np.sin(r)*np.cos(p),                                  np.cos(r)*np.cos(p)] ])
+    return np.array([[np.cos(pitch)*np.cos(yaw),
+                      (np.sin(roll)*np.sin(pitch)*np.cos(yaw)
+                       - np.sin(yaw)*np.cos(roll)),
+                      (np.sin(roll)*np.sin(yaw)
+                       + np.sin(pitch)*np.cos(roll)*np.cos(yaw))],
+                     [np.sin(yaw)*np.cos(pitch),
+                      (np.sin(roll)*np.sin(pitch)*np.sin(yaw)
+                       + np.cos(roll)*np.cos(yaw)),
+                      (-np.sin(roll)*np.cos(yaw)
+                       + np.sin(pitch)*np.sin(yaw)*np.cos(roll))],
+                     [-np.sin(pitch),
+                      np.sin(roll)*np.cos(pitch),
+                      np.cos(roll)*np.cos(pitch)]])
 
-def compQuatFromRotMat(R):
-    tr = R[0,0]+R[1,1]+R[2,2]
-    
-    if ( tr>0 ):
-        S  = np.sqrt(tr+1.)*2
-        qw = 0.25 * S
-        qx = (R[2,1] - R[1,2]) / S
-        qy = (R[0,2] - R[2,0]) / S
-        qz = (R[1,0] - R[0,1]) / S
-        
-    elif ( (R[0,0]>R[1,1]) and (R[0,0]>R[2,2]) ):
-        S  = np.sqrt(1. + R[0,0] - R[1,1] - R[2,2]) * 2
-        qw = (R[2,1] - R[1,2]) / S
-        qx = 0.25 * S
-        qy = (R[0,1] + R[1,0]) / S
-        qz = (R[0,2] + R[2,0]) / S
-        
-    elif ( R[1,1]>R[2,2] ):
-        S  = np.sqrt(1. + R[1,1] - R[0,0] - R[2,2]) * 2
-        qw = (R[0,2] - R[2,0]) / S
-        qx = (R[0,1] + R[1,0]) / S
-        qy = 0.25 * S
-        qz = (R[1,2] + R[2,1])
-        
+
+def comp_quat_from_rot_mat(rot):
+    """Computes quaternion from rotation matrix.
+
+    Args:
+        rot (np.ndarray((3, 3), dtype='float64')): rotation matrix
+
+    Returns:
+        np.ndarray((4, 1), dtype='float64'): quaternion
+    """
+    mat_trace = rot[0, 0]+rot[1, 1]+rot[2, 2]
+
+    if mat_trace > 0:
+        val = np.sqrt(mat_trace+1.)*2
+        q_w = 0.25 * val
+        q_x = (rot[2, 1] - rot[1, 2]) / val
+        q_y = (rot[0, 2] - rot[2, 0]) / val
+        q_z = (rot[1, 0] - rot[0, 1]) / val
+
+    elif ((rot[0, 0] > rot[1, 1]) and (rot[0, 0] > rot[2, 2])):
+        val = np.sqrt(1. + rot[0, 0] - rot[1, 1] - rot[2, 2]) * 2
+        q_w = (rot[2, 1] - rot[1, 2]) / val
+        q_x = 0.25 * val
+        q_y = (rot[0, 1] + rot[1, 0]) / val
+        q_z = (rot[0, 2] + rot[2, 0]) / val
+
+    elif (rot[1, 1] > rot[2, 2]):
+        val = np.sqrt(1. + rot[1, 1] - rot[0, 0] - rot[2, 2]) * 2
+        q_w = (rot[0, 2] - rot[2, 0]) / val
+        q_x = (rot[0, 1] + rot[1, 0]) / val
+        q_y = 0.25 * val
+        q_z = (rot[1, 2] + rot[2, 1])
+
     else:
-        S  = np.sqrt(1. + R[2,2] - R[0,0] - R[1,1])
-        qw = (R[1,0] - R[0,1]) / S
-        qx = (R[0,2] + R[2,0]) / S
-        qy = (R[1,2] + R[2,1]) / S
-        qz = 0.25 * S
-      
-    q  = np.array([[qw],[qx],[qy],[qz]])
-    q /= np.linalg.norm(q)
-    return q
+        val = np.sqrt(1. + rot[2, 2] - rot[0, 0] - rot[1, 1])
+        q_w = (rot[1, 0] - rot[0, 1]) / val
+        q_x = (rot[0, 2] + rot[2, 0]) / val
+        q_y = (rot[1, 2] + rot[2, 1]) / val
+        q_z = 0.25 * val
 
-def compRotMatFromQuat(q):
-    """ COMPUTES R_BtoN AS IT IS USING THE fusionQPose FROM RTIMU """
-    q00 = q[0]**2
-    q11 = q[1]**2
-    q22 = q[2]**2
-    q33 = q[3]**2
-
-    q01 = q[0]*q[1]
-    q02 = q[0]*q[2]
-    q03 = q[0]*q[3]
-
-    q12 = q[1]*q[2]
-    q13 = q[1]*q[3]
-
-    q23 = q[2]*q[3]
-
-    R_BtoN = np.zeros((3,3), dtype=np.float)
-
-    R_BtoN[0,0] = q00 + q11 - q22 - q33
-    R_BtoN[0,1] = 2 * (q12 - q03) 
-    R_BtoN[0,2] = 2 * (q13 + q02)
-
-    R_BtoN[1,0] = 2 * (q12 + q03)
-    R_BtoN[1,1] = q00 - q11 + q22 - q33 
-    R_BtoN[1,2] = 2 * (q23 - q01)
-
-    R_BtoN[2,0] = 2 * (q13 - q02)
-    R_BtoN[2,1] = 2 * (q23 + q01) 
-    R_BtoN[2,2] = q00 - q11 - q22 + q33
-
-    return R_BtoN
-
-def compRPYfromQuat(q):
-    return compRPYfromRotMat(compRotMatFromQuat(q))
-
-def compRPYdiff(eaAfter, eaBefore):
-    return compRPYfromRotMat( compRotMatFromRPY(eaAfter[0,0],eaAfter[1,0],eaAfter[2,0]).T @ compRotMatFromRPY(eaBefore[0,0],eaBefore[1,0],eaBefore[2,0]) )
-
-def compRPYfromRotMat(R):
-    r =  np.arctan2(R[1,2],R[2,2])
-    p = -np.arcsin(R[0,2])
-    y =  np.arctan2(R[0,1],R[0,0])
-    return np.array([[r],[p],[y]])
-
-def compQuatFromRPY(ori):
-    return compQuatFromRotMat( compRotMatFromRPY(ori['roll'], ori['pitch'], ori['yaw']) )
+    quat = np.array([[q_w], [q_x], [q_y], [q_z]])
+    quat /= np.linalg.norm(quat)
+    return quat
 
 
-#######################################################################################################################
-#######################################################################################################################
-### 3D DYNAMICS FUNCTIONS                                                                                           ###
-#######################################################################################################################
-#######################################################################################################################
+def comp_rot_mat_from_quat(quat):
+    """Computes rotation matrix from quaternion (rotation matrix from body to
+       inertial frames as it is using the fusionQPose from RTIMU).
 
-def skew_symmetric(v):
-    return np.array([ [      0 , -v[2,0],  v[1,0] ],
-                      [  v[2,0],      0 , -v[0,0] ],
-                      [ -v[1,0],  v[0,0],      0  ] ])
+    Args:
+        quat (): quaternion
 
-def getOmegaMatrix(v):
-    """ To compute matrix form of gyroscope info """
-    return np.array([ [ 0     ,-v[0,0],-v[1,0],-v[2,0] ],
-                      [ v[0,0], 0     , v[2,0],-v[1,0] ],
-                      [ v[1,0],-v[2,0], 0     , v[0,0] ],
-                      [ v[2,0], v[1,0],-v[0,0], 0      ] ])
+    Returns:
+        np.ndarray((3, 3), dtype='float64'): rotation matrix
+    """
+    q00 = quat[0]**2
+    q11 = quat[1]**2
+    q22 = quat[2]**2
+    q33 = quat[3]**2
 
-def compRPYderivativeWithQuaternion(q):
-    q0 = q[0,0]
-    q1 = q[1,0]
-    q2 = q[2,0]
-    q3 = q[3,0]
-    
-    q00 = q0*q0
-    q01 = q0*q1
-    q02 = q0*q2
-    q03 = q0*q3
+    q01 = quat[0]*quat[1]
+    q02 = quat[0]*quat[2]
+    q03 = quat[0]*quat[3]
 
-    q11 = q1*q1
-    q12 = q1*q2
-    q13 = q1*q3
+    q12 = quat[1]*quat[2]
+    q13 = quat[1]*quat[3]
 
-    q22 = q2*q2
-    q23 = q2*q3
+    q23 = quat[2]*quat[3]
 
-    q33 = q3*q3
+    rot_bn = np.zeros((3, 3), dtype=np.float)
 
-    rollMultA    = q00 - q11 - q22 + q33
-    rollMultB    = q01 + q23
-    rollDenom    = 2./((rollMultA**2) + 4*(rollMultB**2))
-    rollDerivByW = rollDenom*( q1*rollMultA - 2*q0*rollMultB )
-    rollDerivByX = rollDenom*( q0*rollMultA + 2*q1*rollMultB )
-    rollDerivByY = rollDenom*( q3*rollMultA + 2*q2*rollMultB )
-    rollDerivByZ = rollDenom*( q2*rollMultA - 2*q3*rollMultB )
+    rot_bn[0, 0] = q00 + q11 - q22 - q33
+    rot_bn[0, 1] = 2 * (q12 - q03)
+    rot_bn[0, 2] = 2 * (q13 + q02)
 
-    pitchMult     = 2*np.sqrt( 1 - 4*((q13-q02)**2) )
-    pitchDerivByW =  q2*pitchMult
-    pitchDerivByX = -q3*pitchMult
-    pitchDerivByY =  q0*pitchMult
-    pitchDerivByZ = -q1*pitchMult
+    rot_bn[1, 0] = 2 * (q12 + q03)
+    rot_bn[1, 1] = q00 - q11 + q22 - q33
+    rot_bn[1, 2] = 2 * (q23 - q01)
 
-    yawMultA    = q00 + q11 - q22 - q33
-    yawMultB    = q03 + q12
-    yawDenom    = 2./((yawMultA**2) + 4*(yawMultB**2))
-    yawDerivByW = yawDenom*( q3*yawMultA - 2*q0*yawMultB )
-    yawDerivByX = yawDenom*( q2*yawMultA - 2*q1*yawMultB )
-    yawDerivByY = yawDenom*( q1*yawMultA + 2*q2*yawMultB )
-    yawDerivByZ = yawDenom*( q0*yawMultA + 2*q3*yawMultB )
+    rot_bn[2, 0] = 2 * (q13 - q02)
+    rot_bn[2, 1] = 2 * (q23 + q01)
+    rot_bn[2, 2] = q00 - q11 - q22 + q33
 
-    return np.array([ [ rollDerivByW,  rollDerivByX,  rollDerivByY,  rollDerivByZ],
-                      [pitchDerivByW, pitchDerivByX, pitchDerivByY, pitchDerivByZ],
-                      [  yawDerivByW,   yawDerivByX,   yawDerivByY,   yawDerivByZ] ])
+    return rot_bn
 
 
-#######################################################################################################################
-#######################################################################################################################
-### CLASSES                                                                                                         ###
-#######################################################################################################################
-#######################################################################################################################
+def comp_rpy_from_quat(quat):
+    """Computes roll, pitch and yaw values in [rad] from quaternion.
+
+    Args:
+        quat (): quaternion
+
+    Returns:
+        TBD : TBD
+    """
+    return comp_rpy_from_rot_mat(comp_rot_mat_from_quat(quat))
+
+
+def comp_rpy_diff(ea_after, ea_before):
+    """Computes the roll, pitch yaw sequence to go from one set of Euler
+       angles to another.
+
+    Args:
+        ea_after ([type]): [description]
+        ea_before ([type]): [description]
+
+    Returns:
+        [type]: [description]
+    """
+    return comp_rpy_from_rot_mat(comp_rot_mat_from_rpy(ea_after[0, 0],
+                                                       ea_after[1, 0],
+                                                       ea_after[2, 0]).T
+                                 @ comp_rot_mat_from_rpy(ea_before[0, 0],
+                                                         ea_before[1, 0],
+                                                         ea_before[2, 0]))
+
+
+def comp_rpy_from_rot_mat(rot):
+    """Computes roll, pitch and yaw values in [rad] from rotation matrix.
+
+    Args:
+        rot ([type]): rotation matrix
+
+    Returns:
+        np.ndarray((3, 1), dtype='float64'): roll, pitch and yaw angles [rad]
+    """
+    roll = np.arctan2(rot[1, 2], rot[2, 2])
+    pitch = -np.arcsin(rot[0, 2])
+    yaw = np.arctan2(rot[0, 1], rot[0, 0])
+    return np.array([[roll], [pitch], [yaw]])
+
+
+def comp_quat_from_rpy(ori):
+    """Computes quaternion from roll, pitch and yaw values in [rad].
+
+    Args:
+        ori (dict): orientation dictionary with keys roll, pitch and yaw
+
+    Returns:
+        [type]: [description]
+    """
+    return comp_quat_from_rot_mat(comp_rot_mat_from_rpy(ori['roll'],
+                                                        ori['pitch'],
+                                                        ori['yaw']))
+
+
+# 3D DYNAMICS FUNCTIONS.
+
+
+def skew_symmetric(vect):
+    """Returns the skew symmetric form of a three-dimensional vector
+
+    Args:
+        vect (np.ndarray((3, 1), dtype='float64')): vector of dimension 3
+
+    Returns:
+        np.ndarray((3, 3), dtype='float64'): skew symmetric matrix
+    """
+    return np.array([[0, -vect[2, 0], vect[1, 0]],
+                     [vect[2, 0], 0, -vect[0, 0]],
+                     [-vect[1, 0], vect[0, 0], 0]])
+
+
+def get_omega_matrix(vect):
+    """Computes 4x4 matrix form of gyroscope information.
+
+    Args:
+        vect ([type]): [description]
+
+    Returns:
+        [type]: [description]
+    """
+    # To compute matrix form of gyroscope info
+    return np.array([[0, -vect[0, 0], -vect[1, 0], -vect[2, 0]],
+                     [vect[0, 0], 0, vect[2, 0], -vect[1, 0]],
+                     [vect[1, 0], -vect[2, 0], 0, vect[0, 0]],
+                     [vect[2, 0], vect[1, 0], -vect[0, 0], 0]])
+
+
+def comp_rpy_derivative_with_quaternion(quat):
+    """Computes roll, pitch and yaw derivatives in [rad/s] from quaternion.
+
+    Args:
+        quat (np.ndarray((4, 1), dtype='float64')): quaternion
+
+    Returns:
+        np.ndarray((4, 3), dtype='float64'): matrix describing RPY derivatives
+    """
+    q_0 = quat[0, 0]
+    q_1 = quat[1, 0]
+    q_2 = quat[2, 0]
+    q_3 = quat[3, 0]
+
+    q00 = q_0*q_0
+    q01 = q_0*q_1
+    q02 = q_0*q_2
+    q03 = q_0*q_3
+
+    q11 = q_1*q_1
+    q12 = q_1*q_2
+    q13 = q_1*q_3
+
+    q22 = q_2*q_2
+    q23 = q_2*q_3
+
+    q33 = q_3*q_3
+
+    kr_a = q00 - q11 - q22 + q33
+    kr_b = q01 + q23
+    kr_c = 2./((kr_a**2) + 4*(kr_b**2))
+    drdw = kr_c*(q_1*kr_a - 2*q_0*kr_b)
+    drdx = kr_c*(q_0*kr_a + 2*q_1*kr_b)
+    drdy = kr_c*(q_3*kr_a + 2*q_2*kr_b)
+    drdz = kr_c*(q_2*kr_a - 2*q_3*kr_b)
+
+    kp_a = 2*np.sqrt(1 - 4*((q13-q02)**2))
+    dpdw = q_2*kp_a
+    dpdx = -q_3*kp_a
+    dpdy = q_0*kp_a
+    dpdz = -q_1*kp_a
+
+    ky_a = q00 + q11 - q22 - q33
+    ky_b = q03 + q12
+    ky_c = 2./((ky_a**2) + 4*(ky_b**2))
+    dydw = ky_c*(q_3*ky_a - 2*q_0*ky_b)
+    dydx = ky_c*(q_2*ky_a - 2*q_1*ky_b)
+    dydy = ky_c*(q_1*ky_a + 2*q_2*ky_b)
+    dydz = ky_c*(q_0*ky_a + 2*q_3*ky_b)
+
+    return np.array([[drdw, drdx, drdy, drdz],
+                     [dpdw, dpdx, dpdy, dpdz],
+                     [dydw, dydx, dydy, dydz]])
+
+
+# CLASSES.
+
 
 class Quaternion():
-    """ Class for all things quaternion-related """
+    """Class for all things quaternion-related.
+
+    Raises:
+        AttributeError: if user tries to declare quaternion from multiple args
+        ValueError: if user does not provide 4-dimensional column quaternion
+
+    Returns:
+        NoneType: returns nothing upon __init__ termination
+    """
 
     def __init__(self, w=1., x=0., y=0., z=0., axis_angle=None, euler=None):
         if axis_angle is None and euler is None:
-            self.w = w
-            self.x = x
-            self.y = y
-            self.z = z
+            self.q_w = w
+            self.q_x = x
+            self.q_y = y
+            self.q_z = z
 
         elif euler is not None and axis_angle is not None:
-            raise AttributeError("Only one of axis_angle and euler may be specified")
+            raise AttributeError("Give either axis_angle or euler, not both!")
 
         elif axis_angle is not None:
-            if not (type(axis_angle) == list or type(axis_angle) == np.ndarray) or len(axis_angle) != 3:
-                raise ValueError("axis_angle must be a list or an np.ndarray of length 3")
-            
-            axis_angle = np.array(      axis_angle)
-            norm       = np.linalg.norm(axis_angle)
-            self.w = np.cos(0.5*norm)
-            
+            if ((not isinstance(axis_angle, (list, np.ndarray)))
+                    or len(axis_angle) != 3):
+                raise ValueError("axis_angle == (list or np.ndarray of len 3)")
+
+            axis_angle = np.array(axis_angle)
+            norm = np.linalg.norm(axis_angle)
+            self.q_w = np.cos(0.5*norm)
+
             if norm < 1e-50:
-                self.x = 0
-                self.y = 0
-                self.z = 0
-            
+                self.q_x = 0
+                self.q_y = 0
+                self.q_z = 0
+
             else:
                 imag = axis_angle / norm * np.sin(0.5*norm)
-                self.x = imag[0].item()
-                self.y = imag[1].item()
-                self.z = imag[2].item()
+                self.q_x = imag[0].item()
+                self.q_y = imag[1].item()
+                self.q_z = imag[2].item()
 
         else:
-            roll  = euler[0]
+            roll = euler[0]
             pitch = euler[1]
-            yaw   = euler[2]
+            yaw = euler[2]
 
-            cr = np.cos(0.5*roll)
-            sr = np.sin(0.5*roll)
-            cp = np.cos(0.5*pitch)
-            sp = np.sin(0.5*pitch)
-            cy = np.cos(0.5*yaw)
-            sy = np.sin(0.5*yaw)
+            c_r = np.cos(0.5*roll)
+            s_r = np.sin(0.5*roll)
+            c_p = np.cos(0.5*pitch)
+            s_p = np.sin(0.5*pitch)
+            c_y = np.cos(0.5*yaw)
+            s_y = np.sin(0.5*yaw)
 
-            self.w = cr * cp * cy + sr * sp * sy
-            self.x = sr * cp * cy - cr * sp * sy
-            self.y = cr * sp * cy + sr * cp * sy
-            self.z = cr * cp * sy - sr * sp * cy
+            self.q_w = c_r * c_p * c_y + s_r * s_p * s_y
+            self.q_x = s_r * c_p * c_y - c_r * s_p * s_y
+            self.q_y = c_r * s_p * c_y + s_r * c_p * s_y
+            self.q_z = c_r * c_p * s_y - s_r * s_p * c_y
 
     def __repr__(self):
-        return "Quaternion (wxyz): [{}, {}, {}, {}]".format(self.w, self.x, self.y, self.z)
+        return "Quaternion (wxyz): [{}, {}, {}, {}]".format(self.q_w, self.q_x,
+                                                            self.q_y, self.q_z)
 
     def to_mat(self):
-        v = np.array([self.x, self.y, self.z]).reshape(3,1)
-        return (self.w**2 - np.dot(v.T,v)) * np.eye(3) + 2*np.dot(v,v.T) + 2*self.w*skew_symmetric(v)
-    
+        """Converts quaternion to matrix representation
+
+        Returns:
+            [type]: [description]
+        """
+        vect = np.array([self.q_x, self.q_y, self.q_z]).reshape(3, 1)
+        return ((self.q_w**2 - np.dot(vect.T, vect)) * np.eye(3)
+                + 2*np.dot(vect, vect.T)
+                + 2*self.q_w*skew_symmetric(vect))
+
     def to_euler(self):
-        roll  = np.arctan2(2 * (self.w * self.x + self.y * self.z), 1 - 2 * (self.x**2 + self.y**2))
-        pitch = np.arcsin( 2 * (self.w * self.y - self.z * self.x))
-        yaw   = np.arctan2(2 * (self.w * self.z + self.x * self.y), 1 - 2 * (self.y**2 + self.z**2))
+        """[summary]
+
+        Returns:
+            [type]: [description]
+        """
+        roll = np.arctan2(2 * (self.q_w * self.q_x + self.q_y * self.q_z),
+                          1 - 2 * (self.q_x**2 + self.q_y**2))
+        pitch = np.arcsin(2 * (self.q_w * self.q_y - self.q_z * self.q_x))
+        yaw = np.arctan2(2 * (self.q_w * self.q_z + self.q_x * self.q_y),
+                         1 - 2 * (self.q_y**2 + self.q_z**2))
         return np.array([roll, pitch, yaw])
-    
+
     def to_numpy(self):
-        return np.array([self.w, self.x, self.y, self.z])
+        """[summary]
+
+        Returns:
+            [type]: [description]
+        """
+        return np.array([self.q_w, self.q_x, self.q_y, self.q_z])
 
     def normalize(self):
-        normInv = 1./np.linalg.norm([self.w, self.x, self.y, self.z])
-        return Quaternion(self.w*normInv, self.x*normInv, self.y*normInv, self.z*normInv)
+        """[summary]
 
-    def quat_mult(self, q, out='np'):
-        v = np.array([self.x, self.y, self.z]).reshape(3,1)
-        sum_term = np.zeros([4,4])
-        sum_term[0 ,1:] = -v[:,0]
-        sum_term[1:,0 ] =  v[:,0]
-        sum_term[1:,1:] = -skew_symmetric(v)
-        sigma = self.w * np.eye(4) + sum_term
+        Returns:
+            [type]: [description]
+        """
+        norm_inv = 1./np.linalg.norm([self.q_w, self.q_x, self.q_y, self.q_z])
+        return Quaternion(self.q_w*norm_inv, self.q_x*norm_inv,
+                          self.q_y*norm_inv, self.q_z*norm_inv)
 
-        if type(q).__name__ == "Quaternion":
-            quat_np = np.dot(sigma, q.to_numpy())
+    def quat_mult(self, quat, out='np'):
+        """[summary]
+
+        Args:
+            quat ([type]): [description]
+            out (str, optional): [description]. Defaults to 'np'.
+
+        Returns:
+            [type]: [description]
+        """
+        vect = np.array([self.q_x, self.q_y, self.q_z]).reshape(3, 1)
+        sum_term = np.zeros([4, 4])
+        sum_term[0, 1:] = -vect[:, 0]
+        sum_term[1:, 0] = vect[:, 0]
+        sum_term[1:, 1:] = -skew_symmetric(vect)
+        sigma = self.q_w * np.eye(4) + sum_term
+
+        if type(quat).__name__ == "Quaternion":
+            quat_np = np.dot(sigma, quat.to_numpy())
         else:
-            quat_np = np.dot(sigma, q)
+            quat_np = np.dot(sigma, quat)
 
         if out == 'np':
             return quat_np
         elif out == 'Quaternion':
-            quat_obj = Quaternion(quat_np[0], quat_np[1], quat_np[2], quat_np[3])
+            quat_obj = Quaternion(quat_np[0], quat_np[1],
+                                  quat_np[2], quat_np[3])
             return quat_obj
 
 
@@ -436,35 +583,38 @@ class GNSSaidedINSwithEKF():
         self.dt = dt  # Default timestep length in [s]
 
         # Reference location parameters to be the origin of NED frame
-        self.craneCenterLat = np.radians(46.51197)#46.513250)  # [rad]
-        self.craneCenterLon = np.radians(6.624637)# 6.546444)  # [rad]
-        self.craneCenterAlt = 404#435.                   # [m]
+        self.craneCenterLat = np.radians(46.51197)  # 46.513250)  # [rad]
+        self.craneCenterLon = np.radians(6.624637)  # 6.546444)  # [rad]
+        self.craneCenterAlt = 404  # 435.  # [m]
 
         # Compute base world coordinate matrices
-        self.initEcef       = geodetic2ecef(self.craneCenterLat, self.craneCenterLon, self.craneCenterAlt)
-        phiP                = np.arctan2(self.initEcef[2], np.sqrt(((self.initEcef[0])**2)+((self.initEcef[1])**2)))
-        self.ecef2nedMatrix = nRe(phiP, self.craneCenterLon)
+        self.initEcef = geodetic2ecef(self.craneCenterLat,
+                                      self.craneCenterLon,
+                                      self.craneCenterAlt)
+        phi_p = np.arctan2(self.initEcef[2],
+                           np.sqrt(((self.initEcef[0])**2)
+                                   + ((self.initEcef[1])**2)))
+        self.ecef2nedMatrix = comp_ecef_to_ned_mat(phi_p, self.craneCenterLon)
         self.ned2ecefMatrix = self.ecef2nedMatrix.T
 
-        ############################################
-        ### vvv FOR VERIFICATION / DEBUGGING vvv ###
-        ############################################
-        #elf.nedPos = ecef2ned(np.radians(46.513519), np.radians(6.545234), 30., self.initEcef, self.ecef2nedMatrix)
-        self.nedPos = ecef2ned(np.radians(46.51187), np.radians(6.624647), 30., self.initEcef, self.ecef2nedMatrix)
-        self.nedVel = np.zeros((3,1), dtype=np.float)
-        self.llaPos = ned2geodetic(self.nedPos, self.initEcef, self.ned2ecefMatrix)
-        ############################################
-        ### ^^^ FOR VERIFICATION / DEBUGGING ^^^ ###
-        ############################################
+        # vvv FOR VERIFICATION / DEBUGGING vvv
+        # or with 46.513519, 6.545234, 30.
+        self.nedPos = ecef2ned(np.radians(46.51187), np.radians(6.624647),
+                               30., self.initEcef, self.ecef2nedMatrix)
+        self.nedVel = np.zeros((3, 1), dtype=np.float)
+        self.llaPos = ned2geodetic(self.nedPos, self.initEcef,
+                                   self.ned2ecefMatrix)
+        # ^^^ FOR VERIFICATION / DEBUGGING ^^^
 
         # Initial IMU values
         self.curIMUdata = curIMUdata
-        curQuat         = np.array(curIMUdata['fusionQPose']).reshape(4,1)
-        acc_B           = np.array(curIMUdata['accel']      ).reshape(3,1)
-        gyr_B           = np.array(curIMUdata['gyro']       ).reshape(3,1)
-        self.R_BtoN     = compRotMatFromQuat(curQuat)
+        curQuat = np.array(curIMUdata['fusionQPose']).reshape(4, 1)
+        acc_B = np.array(curIMUdata['accel']).reshape(3, 1)
+        gyr_B = np.array(curIMUdata['gyro']).reshape(3, 1)
+        self.R_BtoN = comp_rot_mat_from_quat(curQuat)
 
-        # IMU noise specifications (acc at 8[g]:.09[g], gyr at 2000[dps]:30[dps], mag at 4[G]:1[G])
+        # IMU noise specifications (acc at 8[g]:.09[g],
+        # gyr at 2000[dps]:30[dps], mag at 4[G]:1[G])
         self.sigmaAcc = 0.01125
         self.sigmaGyr = 0.0003
 
@@ -473,61 +623,66 @@ class GNSSaidedINSwithEKF():
         self.q_est = Quaternion().to_numpy()
         self.p_cov = np.eye(9)
 
-        self.gravity     = np.array([[0.],[0.],[-9.81]])
-        self.l_jac       = np.zeros([9,6])
-        self.l_jac[3:,:] = np.eye(6)
-        self.h_jac       = np.zeros([3,9])
-        self.h_jac[:,:3] = np.eye(3)
+        self.gravity = np.array([[0.], [0.], [-9.81]])
+        self.l_jac = np.zeros([9, 6])
+        self.l_jac[3:, :] = np.eye(6)
+        self.h_jac = np.zeros([3, 9])
+        self.h_jac[:, :3] = np.eye(3)
 
     def measurement_update(self, sensor_var, y_k, logFile):
-        S    = self.h_jac @ self.p_cov @ self.h_jac.T + np.diag([sensor_var, sensor_var, sensor_var])
+        S = (self.h_jac @ self.p_cov @ self.h_jac.T
+             + np.diag([sensor_var, sensor_var, sensor_var]))
         Sinv = np.linalg.inv(S)
-        K    = self.p_cov @ self.h_jac.T @ Sinv
+        K = self.p_cov @ self.h_jac.T @ Sinv
 
         logFile.write('Observation:    {}\n'.format(y_k.T))
         logFile.write('Prior estimate: {}\n'.format(self.p_est.T))
-        delta_x = (K @ (y_k-self.p_est).reshape((3,1))).reshape(9,1)
+        delta_x = (K @ (y_k-self.p_est).reshape((3, 1))).reshape(9, 1)
         logFile.write('Difference:     {}\n'.format(delta_x.T))
         self.prev_q_est = np.copy(self.q_est)
-        
+
         self.p_est += delta_x[0:3]
         self.v_est += delta_x[3:6]
-        self.q_est  = Quaternion(*self.q_est).quat_mult(Quaternion(euler=delta_x[6:]))
+        self.q_est = Quaternion(*self.q_est).quat_mult(
+            Quaternion(euler=delta_x[6:]))
 
         self.p_cov = (np.eye(9) - K@self.h_jac) @ self.p_cov
 
     def predict(self):
-        # Update variable shortcuts (right before calling this function, the curIMUdata field is updated)
-        acc_B = np.array(self.curIMUdata['accel']).reshape(3,1)*9.81
-        gyr_B = np.array(self.curIMUdata['gyro'] ).reshape(3,1)
-        
+        # Update variable shortcuts (right before calling this function,
+        # the curIMUdata field is updated)
+        acc_B = np.array(self.curIMUdata['accel']).reshape(3, 1)*9.81
+        gyr_B = np.array(self.curIMUdata['gyro']).reshape(3, 1)
+
         if True in np.isnan(self.p_est):
             self.p_est = np.array(self.nedPos)
         if True in np.isnan(self.v_est):
             self.v_est = np.array(self.nedVel)
         if True in np.isnan(self.q_est):
             self.q_est = Quaternion().to_numpy()
-    
+
         self.prev_q_est = np.copy(self.q_est)
-        prev_acc        = (Quaternion(*self.q_est.reshape(4)).to_mat() @ acc_B) - self.gravity
+        prev_acc = ((Quaternion(*self.q_est.reshape(4)).to_mat() @ acc_B)
+                    - self.gravity)
 
         self.p_est += self.dt * self.v_est + 0.5*(self.dt**2)*prev_acc
         self.v_est += self.dt * prev_acc
-        self.q_est  = Quaternion(*self.q_est).quat_mult(Quaternion(axis_angle=(gyr_B*self.dt)))
+        self.q_est = Quaternion(*self.q_est).quat_mult(
+            Quaternion(axis_angle=(gyr_B*self.dt)))
 
-        F          =  np.eye(9)
-        F[0:3,3:6] =  self.dt * np.eye(3)
-        F[3:6,6:]  = -self.dt * skew_symmetric( (Quaternion(*self.prev_q_est).to_mat() @ acc_B) )
-        Q          = (self.dt**2) * np.diag([self.sigmaAcc, self.sigmaAcc, self.sigmaAcc, self.sigmaGyr, self.sigmaGyr, self.sigmaGyr])
-        self.p_cov = F @ self.p_cov @ F.T + self.l_jac @ Q @ self.l_jac.T
+        mat_f = np.eye(9)
+        mat_f[0:3, 3:6] = self.dt * np.eye(3)
+        mat_f[3:6, 6:] = -self.dt * skew_symmetric(
+            (Quaternion(*self.prev_q_est).to_mat() @ acc_B))
+        mat_q = (self.dt**2) * np.diag([self.sigmaAcc, self.sigmaAcc,
+                                        self.sigmaAcc, self.sigmaGyr,
+                                        self.sigmaGyr, self.sigmaGyr])
+        self.p_cov = (mat_f @ self.p_cov @ mat_f.T
+                      + self.l_jac @ mat_q @ self.l_jac.T)
 
 
+# INITIALIZATION AND MAIN FUNCTION.
 
-#######################################################################################################################
-#######################################################################################################################
-### INITIALIZATION AND MAIN FUNCTION                                                                                ###
-#######################################################################################################################
-#######################################################################################################################
 
 if __name__ == '__main__':
     logFile = open('myEKFlogFile.txt', "a+")
@@ -548,9 +703,9 @@ if __name__ == '__main__':
     print("Power up done\n")
 
     time.sleep(0.5)
-    node.sendATComm("ATE0","OK")
+    node.sendATComm("ATE0", "OK")
     time.sleep(0.5)
-    node.sendATComm("AT+CMEE=2","OK")
+    node.sendATComm("AT+CMEE=2", "OK")
     time.sleep(0.5)
 
     print("Turning GNSS on")
@@ -570,11 +725,11 @@ if __name__ == '__main__':
             print("Settings file does not exist, but will be created")
 
         imuSettings = RTIMU.Settings(SETTINGS_FILE)
-        imu         = RTIMU.RTIMU(imuSettings)
+        imu = RTIMU.RTIMU(imuSettings)
 
         print("IMU Name: " + imu.IMUName())
 
-        if (not imu.IMUInit()):
+        if not imu.IMUInit():
             print("IMU Init Failed")
             sys.exit(1)
         else:
@@ -587,8 +742,8 @@ if __name__ == '__main__':
 
         poll_interval = 0.001*imu.IMUGetPollInterval()
         print("Recommended poll interval: {}[s]".format(poll_interval))
-            
-        tIMU = 10*poll_interval  
+
+        tIMU = 10.*poll_interval
         fIMU = 1./tIMU
         fGPS = 1.
         tGPS = 1./fGPS
@@ -596,39 +751,49 @@ if __name__ == '__main__':
         ekf = GNSSaidedINSwithEKF(tIMU, imu.getIMUData())
 
         startTime = time.perf_counter()
-        timeGPS   = startTime - tGPS
-        timeIMU   = startTime - tIMU
+        timeGPS = startTime - tGPS
+        timeIMU = startTime - tIMU
 
         firstFlag = True
-        readFlag  = False
+        readFlag = False
 
         while True:
             prevTimeGPS = timeGPS
-            timeGPS     = time.perf_counter()
-            dtGPS       = timeGPS - prevTimeGPS
+            timeGPS = time.perf_counter()
+            dtGPS = timeGPS - prevTimeGPS
 
             while True:
                 prevTimeIMU = timeIMU
-                timeIMU     = time.perf_counter()
-                dtIMU       = timeIMU - prevTimeIMU
-                ekf.dt      = dtIMU
+                timeIMU = time.perf_counter()
+                dtIMU = timeIMU - prevTimeIMU
+                ekf.dt = dtIMU
 
                 if imu.IMURead():
                     readFlag = True
                     ekf.curIMUdata = imu.getIMUData()
                     if firstFlag:
-                        print('Initial quaternion set with EA, hope for the best - {}'.format(ekf.curIMUdata['fusionQPose']))
-                        ekf.prev_q_est = Quaternion(*ekf.curIMUdata['fusionQPose']).to_numpy()
+                        print("Initial quaternion set with EA, hope for the "
+                              "best - {}".format(
+                                  ekf.curIMUdata['fusionQPose']))
+                        ekf.prev_q_est = Quaternion(
+                            *ekf.curIMUdata['fusionQPose']).to_numpy()
                         firstFlag = False
-                    '''
-                    q              = np.array(ekf.curIMUdata['fusionQPose']).reshape((4,1)) 
-                    ekf.R_BtoN     = compRotMatFromQuat(q)  # /!\ OUTPUT ([0;0;1][G]) PROVES THAT IT IS THE CORRECT TRANSFORMATION TO GET LEVELED DATA
-                    ekf.acc_B = np.array(ekf.curIMUdata['accel']).reshape((3,1))
-                    ekf.gyr_B = np.array(ekf.curIMUdata['gyro']).reshape((3,1))
-                    '''
+
+                    # q = np.array(ekf.curIMUdata['fusionQPose']).reshape(
+                    #    (4,1))
+                    # ekf.R_BtoN = comp_rot_mat_from_quat(q)
+                    # /!\ OUTPUT ([0;0;1][G]) ABOVE PROVES THAT IT IS THE
+                    # CORRECT TRANSFORMATION TO GET LEVELED DATA
+                    # ekf.acc_B = np.array(ekf.curIMUdata['accel']).reshape(
+                    #    (3,1))
+                    # ekf.gyr_B = np.array(ekf.curIMUdata['gyro']).reshape(
+                    #    (3,1))
+
                     ekf.predict()
-                    #ys.stdout.write('\rPred. at {} is x:{}'.format(time.ctime(0.000001*ekf.curIMUdata['timestamp']),ekf.x.T))
-                    #ys.stdout.flush()
+                    # sys.stdout.write('\rPred. at {} is x:{}'.format(
+                    #   time.ctime(0.000001*ekf.curIMUdata['timestamp']),
+                    #   ekf.x.T))
+                    # sys.stdout.flush()
 
                 else:
                     readFlag = False
@@ -640,31 +805,38 @@ if __name__ == '__main__':
 
                 if time.perf_counter() > (timeGPS + tGPS):
                     if readFlag and ekf.curIMUdata['fusionQPoseValid']:
-                        ############################################
-                        ### vvv FOR VERIFICATION / DEBUGGING vvv ###
-                        ############################################
-                        #kf.nedPos = ecef2ned(np.radians(46.513519), np.radians(6.545234), 398., ekf.initEcef, ekf.ecef2nedMatrix)
-                        # = np.array(ekf.nedPos)
+                        # vvv FOR VERIFICATION / DEBUGGING vvv
                         d_gga = node.getNMEAGGA()
-                        if d_gga=={}:
-                            print('No fix, using defaults (46.51197N,6.624637E,404[m])')
-                            d_gga={'lat':46.51197, 'lon':6.624637, 'alt':404.}
+                        if d_gga == {}:
+                            print("No fix, using defaults "
+                                  "(46.51197N, 6.624637E, 404[m])")
+                            d_gga = {'lat': 46.51197,
+                                     'lon': 6.624637,
+                                     'alt': 404.}
                         print(d_gga)
-                        ekf.nedPos = ecef2ned(np.radians(d_gga['lat']), np.radians(d_gga['lon']), d_gga['alt'], ekf.initEcef, ekf.ecef2nedMatrix)
+                        ekf.nedPos = ecef2ned(np.radians(d_gga['lat']),
+                                              np.radians(d_gga['lon']),
+                                              d_gga['alt'],
+                                              ekf.initEcef,
+                                              ekf.ecef2nedMatrix)
                         z = np.array(ekf.nedPos)
-                        ############################################
-                        ### ^^^ FOR VERIFICATION / DEBUGGING ^^^ ###
-                        ############################################
+                        # or nedPos with 46.513519, 6.545234, 398
+                        # then z = np.array(ekf.nedPos)
+                        # ^^^ FOR VERIFICATION / DEBUGGING ^^^
                         ekf.measurement_update(0.01, z, logFile)
 
-                        print('State update - saving to log file')
-                        logFile.write('Exit GPS on {} - p_est:{} - v_est:{} - q_est:{}\n\n'.format(time.ctime(0.000001*ekf.curIMUdata['timestamp']),ekf.p_est.T, ekf.v_est.T, ekf.q_est.T))
+                        print("State update - saving to log file")
+                        timedata = 0.000001*ekf.curIMUdata['timestamp']
+                        logFile.write("Exit GPS on {} - p_est:{} - v_est:{} - "
+                                      "q_est:{}\n\n".format(
+                                          time.ctime(timedata), ekf.p_est.T,
+                                          ekf.v_est.T, ekf.q_est.T))
                     break
 
     except(KeyboardInterrupt, SystemExit):
         logFile.close()
-        print('Stopping GNSS...')
+        print("Stopping GNSS...")
         node.turnOffGNSS()
-        print('Done. Bye.\n')
+        print("Done. Bye.\n")
 
-    print('Done.\nExiting now.')
+    print("Done.\nExiting now.")
