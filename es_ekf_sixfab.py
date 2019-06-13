@@ -51,6 +51,16 @@ def ecef2ned(pLat, pLon, pAlt, initEcef, ecef2nedMat):
     return ret
 
 def ned2geodetic(ned, initEcef, ned2ecefMat):
+    """Converts NED coordinates to Geodetic
+    
+    Args:
+        ned ([type]): [description]
+        initEcef ([type]): [description]
+        ned2ecefMat ([type]): [description]
+    
+    Returns:
+        [type]: [description]
+    """
     v    = np.array([ned[0,0], ned[1,0], -ned[2,0]]).reshape(3,1)
     xyz  = ned2ecefMat @ v
     xyz += initEcef
