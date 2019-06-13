@@ -1,7 +1,7 @@
 ###############################
 ### *********************** ###
 ### Author: Marc Leroy      ###
-### Last update: 05/31/2019 ###
+### Last update: 06/12/2019 ###
 ### *********************** ###
 ###############################
 
@@ -12,11 +12,7 @@ import time
 import sys
 np.set_printoptions(precision=4, suppress=True,sign='+', linewidth=204)
 import os
-from gps import *
-import threading
-
-gpsd = None
-
+from cellulariot import cellulariot
 
 #######################################################################################################################
 #######################################################################################################################
@@ -274,22 +270,6 @@ def compRPYderivativeWithQuaternion(q):
 #######################################################################################################################
 #######################################################################################################################
 
-class GpsPoller(threading.Thread):
-    """ Class to run GPS in background """
-    
-    def __init__(self):
-        threading.Thread.__init__(self)
-        global gpsd
-        gpsd = gps(mode=WATCH_ENABLE)
-        self.current_value = None
-        self.running = True
-
-    def run(self):
-        global gpsd
-        while gpsp.running:
-            gpsd.next()
-
-
 class Quaternion():
     """ Class for all things quaternion-related """
 
@@ -385,9 +365,9 @@ class GNSSaidedINSwithEKF():
         self.dt = dt  # Default timestep length in [s]
 
         # Reference location parameters to be the origin of NED frame
-        self.craneCenterLat = np.radians(46.513250)  # [rad]
-        self.craneCenterLon = np.radians( 6.546444)  # [rad]
-        self.craneCenterAlt = 435.                   # [m]
+        self.craneCenterLat = np.radians(46.51197)#46.513250)  # [rad]
+        self.craneCenterLon = np.radians(6.624637)# 6.546444)  # [rad]
+        self.craneCenterAlt = 404#435.                   # [m]
 
         # Compute base world coordinate matrices
         self.initEcef       = geodetic2ecef(self.craneCenterLat, self.craneCenterLon, self.craneCenterAlt)
@@ -398,7 +378,8 @@ class GNSSaidedINSwithEKF():
         ############################################
         ### vvv FOR VERIFICATION / DEBUGGING vvv ###
         ############################################
-        self.nedPos = ecef2ned(np.radians(46.513519), np.radians(6.545234), 30., self.initEcef, self.ecef2nedMatrix)
+        #elf.nedPos = ecef2ned(np.radians(46.513519), np.radians(6.545234), 30., self.initEcef, self.ecef2nedMatrix)
+        self.nedPos = ecef2ned(np.radians(46.51187), np.radians(6.624647), 30., self.initEcef, self.ecef2nedMatrix)
         self.nedVel = np.zeros((3,1), dtype=np.float)
         self.llaPos = ned2geodetic(self.nedPos, self.initEcef, self.ned2ecefMatrix)
         ############################################
@@ -478,12 +459,39 @@ class GNSSaidedINSwithEKF():
 #######################################################################################################################
 
 if __name__ == '__main__':
-    gpsp = GpsPoller()
+    logFile = open('myEKFlogFile.txt', "a+")
 
-    logFile = open('myEKFlogFile.txt', "w")
+    node = cellulariot.CellularIoT()
+    node.setupGPIO()
+
+    print("Power up sequence - disabling first")
+    node.disable()
+    print("Disable done\n")
+    time.sleep(1)
+    print("Starting enable")
+    node.enable()
+    print("Enable done\n")
+    time.sleep(1)
+    print("Starting power up")
+    node.powerUp()
+    print("Power up done\n")
+
+    time.sleep(0.5)
+    node.sendATComm("ATE0","OK")
+    time.sleep(0.5)
+    node.sendATComm("AT+CMEE=2","OK")
+    time.sleep(0.5)
+
+    print("Turning GNSS on")
+    node.turnOnGNSS()
+    time.sleep(1)
+
+    node.sendATComm("AT+QGPSCFG=\"galileonmeatype\",1", "OK")
+    time.sleep(0.5)
+    node.sendATComm("AT+QGPSCFG=\"nmeasrc\",1", "OK")
+    time.sleep(0.5)
 
     try:
-        gpsp.start()
         sys.path.append('.')
         SETTINGS_FILE = "myRTIMULib"
         print("Using settings file " + SETTINGS_FILE + ".ini")
@@ -566,20 +574,26 @@ if __name__ == '__main__':
                         ############################################
                         #kf.nedPos = ecef2ned(np.radians(46.513519), np.radians(6.545234), 398., ekf.initEcef, ekf.ecef2nedMatrix)
                         # = np.array(ekf.nedPos)
-                        ekf.nedPos = ecef2ned(np.radians(gpsd.fix.latitude), np.radians(gpsd.fix.longitude), gpsd.fix.altitude, ekf.initEcef, ekf.ecef2nedMatrix)
+                        d_gga = node.getNMEAGGA()
+                        if d_gga=={}:
+                            print('No fix, using defaults (46.51197N,6.624637E,404[m])')
+                            d_gga={'lat':46.51197, 'lon':6.624637, 'alt':404.}
+                        print(d_gga)
+                        ekf.nedPos = ecef2ned(np.radians(d_gga['lat']), np.radians(d_gga['lon']), d_gga['alt'], ekf.initEcef, ekf.ecef2nedMatrix)
                         z = np.array(ekf.nedPos)
                         ############################################
                         ### ^^^ FOR VERIFICATION / DEBUGGING ^^^ ###
                         ############################################
                         ekf.measurement_update(0.01, z, logFile)
 
+                        print('State update - saving to log file')
                         logFile.write('Exit GPS on {} - p_est:{} - v_est:{} - q_est:{}\n\n'.format(time.ctime(0.000001*ekf.curIMUdata['timestamp']),ekf.p_est.T, ekf.v_est.T, ekf.q_est.T))
                     break
 
     except(KeyboardInterrupt, SystemExit):
         logFile.close()
-        print('Killing GPS thread...')
-        gpsp.running = False
-        gpsp.join()
+        print('Stopping GNSS...')
+        node.turnOffGNSS()
+        print('Done. Bye.\n')
 
     print('Done.\nExiting now.')
