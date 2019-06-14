@@ -731,6 +731,20 @@ def init_sixfab_cellulariot():
     return node
 
 
+def save_state_to_log(file, my_ekf):
+    """[summary]
+
+    Args:
+        my_ekf ([type]): [description]
+    """
+    file.write("Exit GPS on {} - p_est:{} - v_est:{}"
+               " - q_est:{}\n\n".format(
+                   time.ctime(0.000001*my_ekf.cur_imu_data['timestamp']),
+                   my_ekf.p_est.T,
+                   my_ekf.v_est.T,
+                   my_ekf.q_est.T))
+
+
 def prepare_for_exit(file, hat):
     """[summary]
 
@@ -852,11 +866,7 @@ def main():
                         ekf.measurement_update(0.01, obs_z, log_file)
 
                         print("State update - saving to log file")
-                        timedata = 0.000001*ekf.cur_imu_data['timestamp']
-                        log_file.write("Exit GPS on {} - p_est:{} - v_est:{}"
-                                       " - q_est:{}\n\n".format(
-                                           time.ctime(timedata), ekf.p_est.T,
-                                           ekf.v_est.T, ekf.q_est.T))
+                        save_state_to_log(log_file, ekf)
                     break
 
     except(KeyboardInterrupt, SystemExit):
