@@ -779,8 +779,8 @@ def main():
         poll_interval = 0.001*imu.IMUGetPollInterval()
         print("Recommended poll interval: {}[s]".format(poll_interval))
         print("Back in main")
-        print(my_imu.IMURead())
-        print(my_imu.getIMUData())
+        print(imu.IMURead())
+        print(imu.getIMUData())
 
         t_imu = 10.*poll_interval
         # delete here? fIMU = 1./t_imu
