@@ -733,6 +733,19 @@ def init_sixfab_cellulariot():
     return node
 
 
+def prepare_for_exit(file, hat):
+    """[summary]
+
+    Args:
+        file ([type]): [description]
+        hat ([type]): [description]
+    """
+    file.close()
+    print("Stopping GNSS...")
+    hat.turnOffGNSS()
+    print("Done. Bye.\n")
+
+
 def main():
     """[summary]
     """
@@ -858,10 +871,7 @@ def main():
                     break
 
     except(KeyboardInterrupt, SystemExit):
-        log_file.close()
-        print("Stopping GNSS...")
-        sixfab.turnOffGNSS()
-        print("Done. Bye.\n")
+        prepare_for_exit(log_file, sixfab)
 
     print("Done.\nExiting now.")
 
