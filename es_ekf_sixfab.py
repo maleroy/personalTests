@@ -733,6 +733,37 @@ def init_sixfab_cellulariot():
     return node
 
 
+def init_imu_breakout():
+    """[summary]
+
+    Returns:
+        [type]: [description]
+    """
+    sys.path.append('.')
+    rtimu_settings_file = "myRTIMULib"
+    print("Using settings file " + rtimu_settings_file + ".ini")
+    if not os.path.exists("./myRTIMULib.ini"):
+        print("Settings file does not exist, but will be created")
+
+    imu_settings = RTIMU.Settings(rtimu_settings_file)
+    my_imu = RTIMU.RTIMU(imu_settings)
+
+    print("IMU Name: " + my_imu.IMUName())
+
+    if not my_imu.IMUInit():
+        print("IMU Init Failed")
+        sys.exit(1)
+    else:
+        print("IMU Init Succeeded")
+
+    my_imu.setSlerpPower(0.02)
+    my_imu.setGyroEnable(True)
+    my_imu.setAccelEnable(True)
+    my_imu.setCompassEnable(True)
+
+    return my_imu
+
+
 def main():
     """[summary]
     """
@@ -741,28 +772,7 @@ def main():
     sixfab = init_sixfab_cellulariot()
 
     try:
-        sys.path.append('.')
-        rtimu_settings_file = "myRTIMULib"
-        print("Using settings file " + rtimu_settings_file + ".ini")
-        if not os.path.exists("./myRTIMULib.ini"):
-            print("Settings file does not exist, but will be created")
-
-        imu_settings = RTIMU.Settings(rtimu_settings_file)
-        imu = RTIMU.RTIMU(imu_settings)
-
-        print("IMU Name: " + imu.IMUName())
-
-        if not imu.IMUInit():
-            print("IMU Init Failed")
-            sys.exit(1)
-        else:
-            print("IMU Init Succeeded")
-
-        imu.setSlerpPower(0.02)
-        imu.setGyroEnable(True)
-        imu.setAccelEnable(True)
-        imu.setCompassEnable(True)
-
+        imu = init_imu_breakout()
         poll_interval = 0.001*imu.IMUGetPollInterval()
         print("Recommended poll interval: {}[s]".format(poll_interval))
 
