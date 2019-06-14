@@ -776,7 +776,7 @@ def main():
         poll_interval = 0.001*imu.IMUGetPollInterval()
         print("Recommended poll interval: {}[s]".format(poll_interval))
 
-        time.sleep(10.*poll_interval)
+        time.sleep(10)
         print("Just returned from IMU initialization")
         print(imu.IMURead())
         print(imu.getIMUData())
