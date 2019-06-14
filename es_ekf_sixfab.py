@@ -454,12 +454,13 @@ class Quaternion():
         NoneType: returns nothing upon __init__ termination
     """
 
-    def __init__(self, w=1., x=0., y=0., z=0., axis_angle=None, euler=None):
+    def __init__(self, q_w=1., q_x=0., q_y=0., q_z=0., axis_angle=None,
+                 euler=None):
         if axis_angle is None and euler is None:
-            self.q_w = w
-            self.q_x = x
-            self.q_y = y
-            self.q_z = z
+            self.q_w = q_w
+            self.q_x = q_x
+            self.q_y = q_y
+            self.q_z = q_z
 
         elif euler is not None and axis_angle is not None:
             raise AttributeError("Give either axis_angle or euler, not both!")
@@ -578,48 +579,52 @@ class Quaternion():
 
 
 class GNSSaidedINSwithEKF():
-    """ Class for GNSS-aided INS """
-    def __init__(self, dt, curIMUdata):
-        self.dt = dt  # Default timestep length in [s]
+    """Class for GNSS-aided INS.
+    """
+    def __init__(self, dt, imu_data):
+        self.kf_dt = dt  # Default timestep length in [s]
 
         # Reference location parameters to be the origin of NED frame
-        self.craneCenterLat = np.radians(46.51197)  # 46.513250)  # [rad]
-        self.craneCenterLon = np.radians(6.624637)  # 6.546444)  # [rad]
-        self.craneCenterAlt = 404  # 435.  # [m]
+        self.crane_center_lat = np.radians(46.51197)  # 46.513250)  # [rad]
+        self.crane_center_lon = np.radians(6.624637)  # 6.546444)  # [rad]
+        self.crane_center_alt = 404  # 435.  # [m]
 
         # Compute base world coordinate matrices
-        self.initEcef = geodetic2ecef(self.craneCenterLat,
-                                      self.craneCenterLon,
-                                      self.craneCenterAlt)
-        phi_p = np.arctan2(self.initEcef[2],
-                           np.sqrt(((self.initEcef[0])**2)
-                                   + ((self.initEcef[1])**2)))
-        self.ecef2nedMatrix = comp_ecef_to_ned_mat(phi_p, self.craneCenterLon)
-        self.ned2ecefMatrix = self.ecef2nedMatrix.T
+        self.init_ecef = geodetic2ecef(self.crane_center_lat,
+                                       self.crane_center_lon,
+                                       self.crane_center_alt)
+        phi_p = np.arctan2(self.init_ecef[2],
+                           np.sqrt(((self.init_ecef[0])**2)
+                                   + ((self.init_ecef[1])**2)))
+        self.ecef2ned_matrix = comp_ecef_to_ned_mat(phi_p,
+                                                    self.crane_center_lon)
+        self.ned2ecef_matrix = self.ecef2ned_matrix.T
 
         # vvv FOR VERIFICATION / DEBUGGING vvv
         # or with 46.513519, 6.545234, 30.
-        self.nedPos = ecef2ned(np.radians(46.51187), np.radians(6.624647),
-                               30., self.initEcef, self.ecef2nedMatrix)
-        self.nedVel = np.zeros((3, 1), dtype=np.float)
-        self.llaPos = ned2geodetic(self.nedPos, self.initEcef,
-                                   self.ned2ecefMatrix)
+        self.ned_pos = ecef2ned(np.radians(46.51187), np.radians(6.624647),
+                                30., self.init_ecef, self.ecef2ned_matrix)
+        self.ned_vel = np.zeros((3, 1), dtype=np.float)
+        self.lla_pos = ned2geodetic(self.ned_pos, self.init_ecef,
+                                    self.ned2ecef_matrix)
         # ^^^ FOR VERIFICATION / DEBUGGING ^^^
 
         # Initial IMU values
-        self.curIMUdata = curIMUdata
-        curQuat = np.array(curIMUdata['fusionQPose']).reshape(4, 1)
-        acc_B = np.array(curIMUdata['accel']).reshape(3, 1)
-        gyr_B = np.array(curIMUdata['gyro']).reshape(3, 1)
-        self.R_BtoN = comp_rot_mat_from_quat(curQuat)
+        self.cur_imu_data = imu_data
+        cur_quat = np.array(imu_data['fusionQPose']).reshape(4, 1)
+        # delete here? acc_B = np.array(imu_data['accel']).reshape(3, 1)
+        # delete here? gyr_B = np.array(imu_data['gyro']).reshape(3, 1)
+        self.rotmat_bn = comp_rot_mat_from_quat(cur_quat)
 
         # IMU noise specifications (acc at 8[g]:.09[g],
         # gyr at 2000[dps]:30[dps], mag at 4[G]:1[G])
-        self.sigmaAcc = 0.01125
-        self.sigmaGyr = 0.0003
+        self.sigma_acc = 0.01125
+        self.sigma_gyr = 0.0003
 
-        self.p_est = np.array(self.nedPos)
-        self.v_est = np.array(self.nedVel)
+        self.prev_q_est = Quaternion()
+
+        self.p_est = np.array(self.ned_pos)
+        self.v_est = np.array(self.ned_vel)
         self.q_est = Quaternion().to_numpy()
         self.p_cov = np.eye(9)
 
@@ -629,16 +634,23 @@ class GNSSaidedINSwithEKF():
         self.h_jac = np.zeros([3, 9])
         self.h_jac[:, :3] = np.eye(3)
 
-    def measurement_update(self, sensor_var, y_k, logFile):
-        S = (self.h_jac @ self.p_cov @ self.h_jac.T
-             + np.diag([sensor_var, sensor_var, sensor_var]))
-        Sinv = np.linalg.inv(S)
-        K = self.p_cov @ self.h_jac.T @ Sinv
+    def measurement_update(self, sensor_var, y_k, kf_log_file):
+        """[summary]
 
-        logFile.write('Observation:    {}\n'.format(y_k.T))
-        logFile.write('Prior estimate: {}\n'.format(self.p_est.T))
-        delta_x = (K @ (y_k-self.p_est).reshape((3, 1))).reshape(9, 1)
-        logFile.write('Difference:     {}\n'.format(delta_x.T))
+        Args:
+            sensor_var ([type]): [description]
+            y_k ([type]): [description]
+            kf_log_file ([type]): [description]
+        """
+        mat_s = (self.h_jac @ self.p_cov @ self.h_jac.T
+                 + np.diag([sensor_var, sensor_var, sensor_var]))
+        mat_s_inv = np.linalg.inv(mat_s)
+        mat_k = self.p_cov @ self.h_jac.T @ mat_s_inv
+
+        kf_log_file.write('Observation:    {}\n'.format(y_k.T))
+        kf_log_file.write('Prior estimate: {}\n'.format(self.p_est.T))
+        delta_x = (mat_k @ (y_k-self.p_est).reshape((3, 1))).reshape(9, 1)
+        kf_log_file.write('Difference:     {}\n'.format(delta_x.T))
         self.prev_q_est = np.copy(self.q_est)
 
         self.p_est += delta_x[0:3]
@@ -646,37 +658,39 @@ class GNSSaidedINSwithEKF():
         self.q_est = Quaternion(*self.q_est).quat_mult(
             Quaternion(euler=delta_x[6:]))
 
-        self.p_cov = (np.eye(9) - K@self.h_jac) @ self.p_cov
+        self.p_cov = (np.eye(9) - mat_k@self.h_jac) @ self.p_cov
 
     def predict(self):
+        """[summary]
+        """
         # Update variable shortcuts (right before calling this function,
-        # the curIMUdata field is updated)
-        acc_B = np.array(self.curIMUdata['accel']).reshape(3, 1)*9.81
-        gyr_B = np.array(self.curIMUdata['gyro']).reshape(3, 1)
+        # the cur_imu_data field is updated)
+        acc_body = np.array(self.cur_imu_data['accel']).reshape(3, 1)*9.81
+        gyr_body = np.array(self.cur_imu_data['gyro']).reshape(3, 1)
 
         if True in np.isnan(self.p_est):
-            self.p_est = np.array(self.nedPos)
+            self.p_est = np.array(self.ned_pos)
         if True in np.isnan(self.v_est):
-            self.v_est = np.array(self.nedVel)
+            self.v_est = np.array(self.ned_vel)
         if True in np.isnan(self.q_est):
             self.q_est = Quaternion().to_numpy()
 
         self.prev_q_est = np.copy(self.q_est)
-        prev_acc = ((Quaternion(*self.q_est.reshape(4)).to_mat() @ acc_B)
+        prev_acc = ((Quaternion(*self.q_est.reshape(4)).to_mat() @ acc_body)
                     - self.gravity)
 
-        self.p_est += self.dt * self.v_est + 0.5*(self.dt**2)*prev_acc
-        self.v_est += self.dt * prev_acc
+        self.p_est += self.kf_dt * self.v_est + 0.5*(self.kf_dt**2)*prev_acc
+        self.v_est += self.kf_dt * prev_acc
         self.q_est = Quaternion(*self.q_est).quat_mult(
-            Quaternion(axis_angle=(gyr_B*self.dt)))
+            Quaternion(axis_angle=(gyr_body*self.kf_dt)))
 
         mat_f = np.eye(9)
-        mat_f[0:3, 3:6] = self.dt * np.eye(3)
-        mat_f[3:6, 6:] = -self.dt * skew_symmetric(
-            (Quaternion(*self.prev_q_est).to_mat() @ acc_B))
-        mat_q = (self.dt**2) * np.diag([self.sigmaAcc, self.sigmaAcc,
-                                        self.sigmaAcc, self.sigmaGyr,
-                                        self.sigmaGyr, self.sigmaGyr])
+        mat_f[0:3, 3:6] = self.kf_dt * np.eye(3)
+        mat_f[3:6, 6:] = -self.kf_dt * skew_symmetric(
+            (Quaternion(*self.prev_q_est).to_mat() @ acc_body))
+        mat_q = (self.kf_dt**2) * np.diag([self.sigma_acc, self.sigma_acc,
+                                           self.sigma_acc, self.sigma_gyr,
+                                           self.sigma_gyr, self.sigma_gyr])
         self.p_cov = (mat_f @ self.p_cov @ mat_f.T
                       + self.l_jac @ mat_q @ self.l_jac.T)
 
@@ -684,8 +698,10 @@ class GNSSaidedINSwithEKF():
 # INITIALIZATION AND MAIN FUNCTION.
 
 
-if __name__ == '__main__':
-    logFile = open('myEKFlogFile.txt', "a+")
+def main():
+    """[summary]
+    """
+    log_file = open('myEKFlogFile.txt', "a+")
 
     node = cellulariot.CellularIoT()
     node.setupGPIO()
@@ -719,13 +735,13 @@ if __name__ == '__main__':
 
     try:
         sys.path.append('.')
-        SETTINGS_FILE = "myRTIMULib"
-        print("Using settings file " + SETTINGS_FILE + ".ini")
+        rtimu_settings_file = "myRTIMULib"
+        print("Using settings file " + rtimu_settings_file + ".ini")
         if not os.path.exists("./myRTIMULib.ini"):
             print("Settings file does not exist, but will be created")
 
-        imuSettings = RTIMU.Settings(SETTINGS_FILE)
-        imu = RTIMU.RTIMU(imuSettings)
+        imu_settings = RTIMU.Settings(rtimu_settings_file)
+        imu = RTIMU.RTIMU(imu_settings)
 
         print("IMU Name: " + imu.IMUName())
 
@@ -743,68 +759,68 @@ if __name__ == '__main__':
         poll_interval = 0.001*imu.IMUGetPollInterval()
         print("Recommended poll interval: {}[s]".format(poll_interval))
 
-        tIMU = 10.*poll_interval
-        fIMU = 1./tIMU
-        fGPS = 1.
-        tGPS = 1./fGPS
+        t_imu = 10.*poll_interval
+        # delete here? fIMU = 1./t_imu
+        f_gps = 1.
+        t_gps = 1./f_gps
 
-        ekf = GNSSaidedINSwithEKF(tIMU, imu.getIMUData())
+        ekf = GNSSaidedINSwithEKF(t_imu, imu.getIMUData())
 
-        startTime = time.perf_counter()
-        timeGPS = startTime - tGPS
-        timeIMU = startTime - tIMU
+        start_time = time.perf_counter()
+        time_gps = start_time - t_gps
+        time_imu = start_time - t_imu
 
-        firstFlag = True
-        readFlag = False
+        first_flag = True
+        read_flag = False
 
         while True:
-            prevTimeGPS = timeGPS
-            timeGPS = time.perf_counter()
-            dtGPS = timeGPS - prevTimeGPS
+            # delete here? prevTimeGPS = time_gps
+            time_gps = time.perf_counter()
+            # delete here? dtGPS = time_gps - prevTimeGPS
 
             while True:
-                prevTimeIMU = timeIMU
-                timeIMU = time.perf_counter()
-                dtIMU = timeIMU - prevTimeIMU
-                ekf.dt = dtIMU
+                prev_time_imu = time_imu
+                time_imu = time.perf_counter()
+                dt_imu = time_imu - prev_time_imu
+                ekf.kf_dt = dt_imu
 
                 if imu.IMURead():
-                    readFlag = True
-                    ekf.curIMUdata = imu.getIMUData()
-                    if firstFlag:
+                    read_flag = True
+                    ekf.cur_imu_data = imu.getIMUData()
+                    if first_flag:
                         print("Initial quaternion set with EA, hope for the "
                               "best - {}".format(
-                                  ekf.curIMUdata['fusionQPose']))
+                                  ekf.cur_imu_data['fusionQPose']))
                         ekf.prev_q_est = Quaternion(
-                            *ekf.curIMUdata['fusionQPose']).to_numpy()
-                        firstFlag = False
+                            *ekf.cur_imu_data['fusionQPose']).to_numpy()
+                        first_flag = False
 
-                    # q = np.array(ekf.curIMUdata['fusionQPose']).reshape(
+                    # q = np.array(ekf.cur_imu_data['fusionQPose']).reshape(
                     #    (4,1))
-                    # ekf.R_BtoN = comp_rot_mat_from_quat(q)
+                    # ekf.rotmat_bn = comp_rot_mat_from_quat(q)
                     # /!\ OUTPUT ([0;0;1][G]) ABOVE PROVES THAT IT IS THE
                     # CORRECT TRANSFORMATION TO GET LEVELED DATA
-                    # ekf.acc_B = np.array(ekf.curIMUdata['accel']).reshape(
+                    # ekf.acc_B = np.array(ekf.cur_imu_data['accel']).reshape(
                     #    (3,1))
-                    # ekf.gyr_B = np.array(ekf.curIMUdata['gyro']).reshape(
+                    # ekf.gyr_B = np.array(ekf.cur_imu_data['gyro']).reshape(
                     #    (3,1))
 
                     ekf.predict()
                     # sys.stdout.write('\rPred. at {} is x:{}'.format(
-                    #   time.ctime(0.000001*ekf.curIMUdata['timestamp']),
+                    #   time.ctime(0.000001*ekf.cur_imu_data['timestamp']),
                     #   ekf.x.T))
                     # sys.stdout.flush()
 
                 else:
-                    readFlag = False
+                    read_flag = False
                     print("DIDNT READ IMU")
 
                 while True:
-                    if time.perf_counter() > (timeIMU + tIMU):
+                    if time.perf_counter() > (time_imu + t_imu):
                         break
 
-                if time.perf_counter() > (timeGPS + tGPS):
-                    if readFlag and ekf.curIMUdata['fusionQPoseValid']:
+                if time.perf_counter() > (time_gps + t_gps):
+                    if read_flag and ekf.cur_imu_data['fusionQPoseValid']:
                         # vvv FOR VERIFICATION / DEBUGGING vvv
                         d_gga = node.getNMEAGGA()
                         if d_gga == {}:
@@ -814,29 +830,33 @@ if __name__ == '__main__':
                                      'lon': 6.624637,
                                      'alt': 404.}
                         print(d_gga)
-                        ekf.nedPos = ecef2ned(np.radians(d_gga['lat']),
-                                              np.radians(d_gga['lon']),
-                                              d_gga['alt'],
-                                              ekf.initEcef,
-                                              ekf.ecef2nedMatrix)
-                        z = np.array(ekf.nedPos)
-                        # or nedPos with 46.513519, 6.545234, 398
-                        # then z = np.array(ekf.nedPos)
+                        ekf.ned_pos = ecef2ned(np.radians(d_gga['lat']),
+                                               np.radians(d_gga['lon']),
+                                               d_gga['alt'],
+                                               ekf.init_ecef,
+                                               ekf.ecef2ned_matrix)
+                        obs_z = np.array(ekf.ned_pos)
+                        # or ned_pos with 46.513519, 6.545234, 398
+                        # then obs_z = np.array(ekf.ned_pos)
                         # ^^^ FOR VERIFICATION / DEBUGGING ^^^
-                        ekf.measurement_update(0.01, z, logFile)
+                        ekf.measurement_update(0.01, obs_z, log_file)
 
                         print("State update - saving to log file")
-                        timedata = 0.000001*ekf.curIMUdata['timestamp']
-                        logFile.write("Exit GPS on {} - p_est:{} - v_est:{} - "
-                                      "q_est:{}\n\n".format(
-                                          time.ctime(timedata), ekf.p_est.T,
-                                          ekf.v_est.T, ekf.q_est.T))
+                        timedata = 0.000001*ekf.cur_imu_data['timestamp']
+                        log_file.write("Exit GPS on {} - p_est:{} - v_est:{}"
+                                       " - q_est:{}\n\n".format(
+                                           time.ctime(timedata), ekf.p_est.T,
+                                           ekf.v_est.T, ekf.q_est.T))
                     break
 
     except(KeyboardInterrupt, SystemExit):
-        logFile.close()
+        log_file.close()
         print("Stopping GNSS...")
         node.turnOffGNSS()
         print("Done. Bye.\n")
 
     print("Done.\nExiting now.")
+
+
+if __name__ == '__main__':
+    main()
