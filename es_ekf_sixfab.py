@@ -775,7 +775,11 @@ def main():
         imu = init_imu_breakout()
         poll_interval = 0.001*imu.IMUGetPollInterval()
         print("Recommended poll interval: {}[s]".format(poll_interval))
-
+        
+        print("Just returned from IMU initialization")
+        print(imu.IMURead())
+        print(imu.getIMUData())
+        
         t_imu = 10.*poll_interval
         # delete here? fIMU = 1./t_imu
         f_gps = 1.
