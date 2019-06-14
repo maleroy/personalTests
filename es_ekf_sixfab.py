@@ -761,9 +761,6 @@ def init_imu_breakout():
     my_imu.setAccelEnable(True)
     my_imu.setCompassEnable(True)
 
-    print(my_imu.IMURead())
-    print(my_imu.getIMUData())
-
     return my_imu
 
 
@@ -778,9 +775,6 @@ def main():
         imu = init_imu_breakout()
         poll_interval = 0.001*imu.IMUGetPollInterval()
         print("Recommended poll interval: {}[s]".format(poll_interval))
-        print("Back in main")
-        print(imu.IMURead())
-        print(imu.getIMUData())
 
         t_imu = 10.*poll_interval
         # delete here? fIMU = 1./t_imu
@@ -802,6 +796,9 @@ def main():
             # delete here? dtGPS = time_gps - prevTimeGPS
 
             while True:
+                print("In inner loop")
+                print(imu.IMURead())
+                print(imu.getIMUData())
                 prev_time_imu = time_imu
                 time_imu = time.perf_counter()
                 dt_imu = time_imu - prev_time_imu
