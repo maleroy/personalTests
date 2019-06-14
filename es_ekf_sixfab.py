@@ -761,6 +761,13 @@ def init_imu_breakout():
     my_imu.setAccelEnable(True)
     my_imu.setCompassEnable(True)
 
+    try:
+        print(my_imu.IMURead())
+        print(my_imu.getIMUData())
+
+    except:
+        print("Could not read IMU")
+
     return my_imu
 
 
