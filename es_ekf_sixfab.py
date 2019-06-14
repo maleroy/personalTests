@@ -713,6 +713,12 @@ class BreakoutIMU():
         self.imu.setAccelEnable(True)
         self.imu.setCompassEnable(True)
 
+    def read_breakout_imu(self):
+        """[summary]
+        """
+        print(self.imu.IMURead())
+        print(self.imu.getIMUData())
+
 
 # INITIALIZATION AND MAIN FUNCTION.
 
@@ -791,6 +797,7 @@ def main():
     sixfab = init_sixfab_cellulariot()
 
     my_imu = BreakoutIMU()
+    my_imu.read_breakout_imu()
 
     t_imu = 10.*0.001*my_imu.imu.IMUGetPollInterval()
     f_gps = 1.
