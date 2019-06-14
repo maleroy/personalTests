@@ -700,7 +700,6 @@ def init_sixfab_cellulariot():
     Returns:
         [type]: [description]
     """
-    node = init_sixfab_cellulariot()
     node = cellulariot.CellularIoT()
     node.setupGPIO()
 
