@@ -775,22 +775,26 @@ def main():
         imu = init_imu_breakout()
         poll_interval = 0.001*imu.IMUGetPollInterval()
         print("Recommended poll interval: {}[s]".format(poll_interval))
-        
+
+        time.sleep(10.*poll_interval)
         print("Just returned from IMU initialization")
         print(imu.IMURead())
         print(imu.getIMUData())
-        
+
         t_imu = 10.*poll_interval
         # delete here? fIMU = 1./t_imu
         f_gps = 1.
         t_gps = 1./f_gps
 
+        time.sleep(t_imu)
         print("In main, EKF not yet initialized")
         print(imu.IMURead())
         print(imu.getIMUData())
 
+        time.sleep(t_imu)
         ekf = GNSSaidedINSwithEKF(t_imu, imu.getIMUData())
 
+        time.sleep(t_imu)
         print("Back in main, EKF has been initialized")
         print(imu.IMURead())
         print(imu.getIMUData())
