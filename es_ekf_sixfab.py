@@ -115,10 +115,6 @@ def ned2geodetic(ned, init_ecef, ned2ecef_mat):
     xyz = ned2ecef_mat @ vect
     xyz += init_ecef
 
-    # x = xyz[0, 0]
-    # y = xyz[1, 0]
-    # z = xyz[2, 0]
-
     k_semimajor_axis = 6378137
     k_semiminor_axis = 6356752.3142
     first_ecc_sq = 0.00669437999014
@@ -698,11 +694,13 @@ class GNSSaidedINSwithEKF():
 # INITIALIZATION AND MAIN FUNCTION.
 
 
-def main():
+def init_sixfab_cellulariot():
     """[summary]
-    """
-    log_file = open('myEKFlogFile.txt', "a+")
 
+    Returns:
+        [type]: [description]
+    """
+    node = init_sixfab_cellulariot()
     node = cellulariot.CellularIoT()
     node.setupGPIO()
 
@@ -732,6 +730,16 @@ def main():
     time.sleep(0.5)
     node.sendATComm("AT+QGPSCFG=\"nmeasrc\",1", "OK")
     time.sleep(0.5)
+
+    return node
+
+
+def main():
+    """[summary]
+    """
+    log_file = open('myEKFlogFile.txt', "a+")
+
+    sixfab = init_sixfab_cellulariot()
 
     try:
         sys.path.append('.')
@@ -822,7 +830,7 @@ def main():
                 if time.perf_counter() > (time_gps + t_gps):
                     if read_flag and ekf.cur_imu_data['fusionQPoseValid']:
                         # vvv FOR VERIFICATION / DEBUGGING vvv
-                        d_gga = node.getNMEAGGA()
+                        d_gga = sixfab.getNMEAGGA()
                         if d_gga == {}:
                             print("No fix, using defaults "
                                   "(46.51197N, 6.624637E, 404[m])")
@@ -852,7 +860,7 @@ def main():
     except(KeyboardInterrupt, SystemExit):
         log_file.close()
         print("Stopping GNSS...")
-        node.turnOffGNSS()
+        sixfab.turnOffGNSS()
         print("Done. Bye.\n")
 
     print("Done.\nExiting now.")
