@@ -733,6 +733,35 @@ def init_sixfab_cellulariot():
     return node
 
 
+def init_imu_breakout():
+    """[summary]
+
+    Returns:
+        [type]: [description]
+    """
+    sys.path.append('.')
+    rtimu_settings_file = "myRTIMULib"
+    print("Using settings file " + rtimu_settings_file + ".ini")
+    if not os.path.exists("./myRTIMULib.ini"):
+        print("Settings file does not exist, but will be created")
+
+    imu_settings = RTIMU.Settings(rtimu_settings_file)
+    my_imu = RTIMU.RTIMU(imu_settings)
+
+    if not my_imu.IMUInit():
+        print("IMUInit failed")
+        sys.exit(1)
+    else:
+        print("IMUInit of {} succeeded".format(my_imu.IMUName()))
+
+    my_imu.setSlerpPower(0.02)
+    my_imu.setGyroEnable(True)
+    my_imu.setAccelEnable(True)
+    my_imu.setCompassEnable(True)
+
+    return my_imu
+
+
 def prepare_for_exit(file, hat):
     """[summary]
 
@@ -753,32 +782,14 @@ def main():
 
     sixfab = init_sixfab_cellulariot()
 
+    imu = init_imu_breakout()
+
+    t_imu = 10.*0.001*imu.IMUGetPollInterval()
+    # delete here? fIMU = 1./t_imu
+    f_gps = 1.
+    t_gps = 1./f_gps
+
     try:
-        sys.path.append('.')
-        rtimu_settings_file = "myRTIMULib"
-        print("Using settings file " + rtimu_settings_file + ".ini")
-        if not os.path.exists("./myRTIMULib.ini"):
-            print("Settings file does not exist, but will be created")
-
-        imu_settings = RTIMU.Settings(rtimu_settings_file)
-        imu = RTIMU.RTIMU(imu_settings)
-
-        if not imu.IMUInit():
-            print("IMUInit failed")
-            sys.exit(1)
-        else:
-            print("IMUInit of {} succeeded".format(imu.IMUName()))
-
-        imu.setSlerpPower(0.02)
-        imu.setGyroEnable(True)
-        imu.setAccelEnable(True)
-        imu.setCompassEnable(True)
-
-        t_imu = 10.*0.001*imu.IMUGetPollInterval()
-        # delete here? fIMU = 1./t_imu
-        f_gps = 1.
-        t_gps = 1./f_gps
-
         ekf = GNSSaidedINSwithEKF(t_imu, imu.getIMUData())
 
         start_time = time.perf_counter()
