@@ -689,37 +689,6 @@ class GNSSaidedINSwithEKF():
                       + self.l_jac @ mat_q @ self.l_jac.T)
 
 
-class BreakoutIMU():
-    """Class for having standalone IMU instances
-    """
-    def __init__(self):
-        sys.path.append('.')
-        rtimu_settings_file = "myRTIMULib"
-        print("Using settings file " + rtimu_settings_file + ".ini")
-        if not os.path.exists("./myRTIMULib.ini"):
-            print("Settings file does not exist, but will be created")
-
-        imu_settings = RTIMU.Settings(rtimu_settings_file)
-        self.imu = RTIMU.RTIMU(imu_settings)
-
-        if not self.imu.IMUInit():
-            print("IMUInit failed")
-            sys.exit(1)
-        else:
-            print("IMUInit of {} succeeded".format(self.imu.IMUName()))
-
-        self.imu.setSlerpPower(0.02)
-        self.imu.setGyroEnable(True)
-        self.imu.setAccelEnable(True)
-        self.imu.setCompassEnable(True)
-
-    def read_breakout_imu(self):
-        """[summary]
-        """
-        print(self.imu.IMURead())
-        print(self.imu.getIMUData())
-
-
 # INITIALIZATION AND MAIN FUNCTION.
 
 
@@ -796,8 +765,25 @@ def main():
 
     sixfab = init_sixfab_cellulariot()
 
-    my_imu = BreakoutIMU()
-    my_imu.read_breakout_imu()
+    sys.path.append('.')
+    rtimu_settings_file = "myRTIMULib"
+    print("Using settings file " + rtimu_settings_file + ".ini")
+    if not os.path.exists("./myRTIMULib.ini"):
+        print("Settings file does not exist, but will be created")
+
+    imu_settings = RTIMU.Settings(rtimu_settings_file)
+    self.imu = RTIMU.RTIMU(imu_settings)
+
+    if not self.imu.IMUInit():
+        print("IMUInit failed")
+        sys.exit(1)
+    else:
+        print("IMUInit of {} succeeded".format(self.imu.IMUName()))
+
+    self.imu.setSlerpPower(0.02)
+    self.imu.setGyroEnable(True)
+    self.imu.setAccelEnable(True)
+    self.imu.setCompassEnable(True)
 
     t_imu = 10.*0.001*my_imu.imu.IMUGetPollInterval()
     f_gps = 1.
