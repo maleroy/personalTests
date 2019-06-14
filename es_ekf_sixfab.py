@@ -781,6 +781,10 @@ def main():
         f_gps = 1.
         t_gps = 1./f_gps
 
+        print("In main, EKF not yet initialized")
+        print(imu.IMURead())
+        print(imu.getIMUData())
+
         ekf = GNSSaidedINSwithEKF(t_imu, imu.getIMUData())
 
         print("Back in main, EKF has been initialized")
@@ -800,9 +804,6 @@ def main():
             # delete here? dtGPS = time_gps - prevTimeGPS
 
             while True:
-                print("In inner loop")
-                print(imu.IMURead())
-                print(imu.getIMUData())
                 prev_time_imu = time_imu
                 time_imu = time.perf_counter()
                 dt_imu = time_imu - prev_time_imu
