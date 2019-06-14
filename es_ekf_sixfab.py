@@ -772,25 +772,25 @@ def main():
         print("Settings file does not exist, but will be created")
 
     imu_settings = RTIMU.Settings(rtimu_settings_file)
-    self.imu = RTIMU.RTIMU(imu_settings)
+    imu = RTIMU.RTIMU(imu_settings)
 
-    if not self.imu.IMUInit():
+    if not imu.IMUInit():
         print("IMUInit failed")
         sys.exit(1)
     else:
-        print("IMUInit of {} succeeded".format(self.imu.IMUName()))
+        print("IMUInit of {} succeeded".format(imu.IMUName()))
 
-    self.imu.setSlerpPower(0.02)
-    self.imu.setGyroEnable(True)
-    self.imu.setAccelEnable(True)
-    self.imu.setCompassEnable(True)
+    imu.setSlerpPower(0.02)
+    imu.setGyroEnable(True)
+    imu.setAccelEnable(True)
+    imu.setCompassEnable(True)
 
-    t_imu = 10.*0.001*my_imu.imu.IMUGetPollInterval()
+    t_imu = 10.*0.001*imu.IMUGetPollInterval()
     f_gps = 1.
     t_gps = 1./f_gps
 
     try:
-        ekf = GNSSaidedINSwithEKF(t_imu, my_imu.imu.getIMUData())
+        ekf = GNSSaidedINSwithEKF(t_imu, imu.getIMUData())
 
         start_time = time.perf_counter()
         time_gps = start_time - t_gps
@@ -808,9 +808,9 @@ def main():
                 dt_imu = time_imu - prev_time_imu
                 ekf.kf_dt = dt_imu
 
-                if my_imu.imu.IMURead():
+                if imu.IMURead():
                     read_flag = True
-                    ekf.cur_imu_data = my_imu.imu.getIMUData()
+                    ekf.cur_imu_data = imu.getIMUData()
                     if first_flag:
                         print("Initial quaternion set with EA, hope for the "
                               "best - {}".format(
