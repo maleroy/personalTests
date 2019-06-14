@@ -783,6 +783,10 @@ def main():
 
         ekf = GNSSaidedINSwithEKF(t_imu, imu.getIMUData())
 
+        print("Back in main, EKF has been initialized")
+        print(imu.IMURead())
+        print(imu.getIMUData())
+
         start_time = time.perf_counter()
         time_gps = start_time - t_gps
         time_imu = start_time - t_imu
