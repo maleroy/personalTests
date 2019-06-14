@@ -763,28 +763,22 @@ def main():
         imu_settings = RTIMU.Settings(rtimu_settings_file)
         imu = RTIMU.RTIMU(imu_settings)
 
-        print("IMU Name: " + imu.IMUName())
-
         if not imu.IMUInit():
-            print("IMU Init Failed")
+            print("IMUInit failed")
             sys.exit(1)
         else:
-            print("IMU Init Succeeded")
+            print("IMUInit of {} succeeded".format(imu.IMUName()))
 
         imu.setSlerpPower(0.02)
         imu.setGyroEnable(True)
         imu.setAccelEnable(True)
         imu.setCompassEnable(True)
 
-        poll_interval = 0.001*imu.IMUGetPollInterval()
-        print("Recommended poll interval: {}[s]".format(poll_interval))
-
-        t_imu = 10.*poll_interval
+        t_imu = 10.*0.001*imu.IMUGetPollInterval()
         # delete here? fIMU = 1./t_imu
         f_gps = 1.
         t_gps = 1./f_gps
 
-        time.sleep(t_imu)
         ekf = GNSSaidedINSwithEKF(t_imu, imu.getIMUData())
 
         start_time = time.perf_counter()
