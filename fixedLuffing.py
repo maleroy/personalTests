@@ -1,50 +1,62 @@
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
 
 from matplotlib.patches import Polygon
 from matplotlib.widgets import Slider
 
-n_cams = 4
-tow_h = 60
-jib_l = 68
-cam_hfov = np.radians(0.5*45.4)
+NCAMS = 4
+TOW_H = 60
+JIB_L = 68
+CAM_HFOV = np.radians(0.5*45.4)
 
-def plotScene(ax, luf_ang, cams_kr, cams_ang, ax_title):
-    ax.plot([0,     0,     0 + jib_l*np.cos(luf_ang)],
-            [0, tow_h, tow_h + jib_l*np.sin(luf_ang)],
-            color='orange')
 
-    for i in range(n_cams):
-        plotCam(ax, cams_kr[i], cams_ang[i], luf_ang)
+def plot_scene(cur_ax, luf_ang, cams_kr, cams_ang, ax_title):
+    cur_ax.plot([0, 0, 0 + JIB_L*np.cos(luf_ang)],
+                [0, TOW_H, TOW_H + JIB_L*np.sin(luf_ang)],
+                color='orange')
 
-    ax.title.set_text(ax_title)
-    ax.set_xlim([-200,200])
-    ax.set_ylim([-10,200])
-    ax.grid(True)
+    for i in range(NCAMS):
+        plot_cam(cur_ax, cams_kr[i], cams_ang[i], luf_ang)
+
+    cur_ax.title.set_text(ax_title)
+    cur_ax.set_xlim([-200, 200])
+    cur_ax.set_ylim([-10, 200])
+    cur_ax.grid(True)
     print("\n")
 
-def plotCam(ax, cam_kr, cam_ang, luf_ang):
+
+def plot_cam(cur_ax, cam_kr, cam_ang, luf_ang):
     fov_limit = np.radians(60.0)
-    ax.scatter([    0 + cam_kr*jib_l*np.cos(luf_ang),     0 + cam_kr*jib_l*np.cos(luf_ang),     0 + cam_kr*jib_l*np.cos(luf_ang)],
-               [tow_h + cam_kr*jib_l*np.sin(luf_ang), tow_h + cam_kr*jib_l*np.sin(luf_ang), tow_h + cam_kr*jib_l*np.sin(luf_ang)],
-               color='blue')
+    cur_ax.scatter([0 + cam_kr*JIB_L*np.cos(luf_ang),
+                    0 + cam_kr*JIB_L*np.cos(luf_ang),
+                    0 + cam_kr*JIB_L*np.cos(luf_ang)],
+                   [TOW_H + cam_kr*JIB_L*np.sin(luf_ang),
+                    TOW_H + cam_kr*JIB_L*np.sin(luf_ang),
+                    TOW_H + cam_kr*JIB_L*np.sin(luf_ang)],
+                   color='blue')
 
-    print("Cam @ {:4.2f} with luf_ang {:5.1f}: left border is {:5.1f} and right border is {:5.1f}".format(cam_kr, np.degrees(luf_ang), np.degrees(luf_ang+cam_ang-cam_hfov), np.degrees(luf_ang+cam_ang+cam_hfov)))
+    print("Cam @ {:4.2f} with luf_ang {:5.1f}: left border is {:5.1f} and right border is {:5.1f}".format(cam_kr, np.degrees(luf_ang), np.degrees(luf_ang+cam_ang-CAM_HFOV), np.degrees(luf_ang+cam_ang+CAM_HFOV)))
 
-    if (luf_ang+cam_ang-cam_hfov)>=fov_limit:
+    if (luf_ang+cam_ang-CAM_HFOV) >= fov_limit:
         print("Cam @ {:4.2f} with luf_ang {:5.1f}: FOV not pointing to the ground!\n".format(cam_kr, np.degrees(luf_ang)))
 
-    elif (luf_ang+cam_ang)>=fov_limit:
+    elif (luf_ang+cam_ang) >= fov_limit:
         print("Cam @ {:4.2f} with luf_ang {:5.1f}: FOV mid-line pointing above the horizon!\n".format(cam_kr, np.degrees(luf_ang)))
 
-    elif (luf_ang+cam_ang+cam_hfov)>=fov_limit:
+    elif (luf_ang+cam_ang+CAM_HFOV) >= fov_limit:
         print("Cam @ {:4.2f} with luf_ang {:5.1f}: FOV is surely pretty far from the crane!\n".format(cam_kr, np.degrees(luf_ang)))
 
     else:
-        ax.add_patch(Polygon(np.array([[0 + cam_kr*jib_l*np.cos(luf_ang),   tow_h + cam_kr*jib_l*np.sin(luf_ang)],
-                                       [0 + cam_kr*jib_l*np.cos(luf_ang) + (tow_h + cam_kr*jib_l*np.sin(luf_ang))*np.tan(luf_ang+cam_ang-cam_hfov), 0],
-                                       [0 + cam_kr*jib_l*np.cos(luf_ang) + (tow_h + cam_kr*jib_l*np.sin(luf_ang))*np.tan(luf_ang+cam_ang+cam_hfov), 0]]),
-                                 fc='blue', ec=None, alpha=0.3))
+        cur_ax.add_patch(
+            Polygon(np.array([[0 + cam_kr*JIB_L*np.cos(luf_ang),
+                               TOW_H + cam_kr*JIB_L*np.sin(luf_ang)],
+                              [0 + cam_kr*JIB_L*np.cos(luf_ang) + (
+                                  TOW_H + cam_kr*JIB_L*np.sin(luf_ang))*np.tan(
+                                      luf_ang+cam_ang-CAM_HFOV), 0],
+                              [0 + cam_kr*JIB_L*np.cos(luf_ang) + (
+                                  TOW_H + cam_kr*JIB_L*np.sin(luf_ang))*np.tan(
+                                      luf_ang+cam_ang+CAM_HFOV), 0]]),
+                    fc='blue', ec=None, alpha=0.3))
 
 
 def main():
@@ -57,100 +69,69 @@ def main():
     luf_min = np.radians(35)
     luf_max = np.radians(85)
 
-    '''
-    axluf = plt.axes([0.7, 0.45, 0.2, 0.01])
-    axck1 = plt.axes([0.7, 0.39, 0.2, 0.01])
-    axca1 = plt.axes([0.7, 0.36, 0.2, 0.01])
-    axck2 = plt.axes([0.7, 0.30, 0.2, 0.01])
-    axca2 = plt.axes([0.7, 0.27, 0.2, 0.01])
-    axck3 = plt.axes([0.7, 0.21, 0.2, 0.01])
-    axca3 = plt.axes([0.7, 0.18, 0.2, 0.01])
-    '''
-    v = 0.45
-    axluf = plt.axes([0.7, v, 0.2, 0.01])
+    vert_pos = 0.45
+    axluf = plt.axes([0.7, vert_pos, 0.2, 0.01])
     axck = []
     axca = []
-    v-=0.03
-    for i in range(n_cams):
-        v-=0.03
-        axck.append(plt.axes([0.7, v, 0.2, 0.01]))
-        v-=0.03
-        axca.append(plt.axes([0.7, v, 0.2, 0.01]))
-        v-=0.03
+    vert_pos -= 0.03
+    for i in range(NCAMS):
+        vert_pos -= 0.03
+        axck.append(plt.axes([0.7, vert_pos, 0.2, 0.01]))
+        vert_pos -= 0.03
+        axca.append(plt.axes([0.7, vert_pos, 0.2, 0.01]))
+        vert_pos -= 0.03
 
     ck_min = 0.0
     ck_max = 1.0
     ca_min = -85.0
-    ca_max =  45.0
+    ca_max = 45.0
 
-    #cams_kr = [0.25, 0.50, 0.75]
-    #cams_ang = np.radians([0.0, -40.0, -45.0])
-    cams_kr = [x/(n_cams+1) for x in range(1, n_cams+1)]
+    cams_kr = [x/(NCAMS+1) for x in range(1, NCAMS+1)]
     pa_min = -45
     pa_max = 0
-    cams_ang = np.radians([pa_max-x/(n_cams-1) for x in (pa_max-pa_min)*np.array(range(n_cams))])
-    axs_titles = ['At minimum luffing angle', 'At maximum luffing angle', 'At luffing angle from slider']
+    cams_ang = np.radians([pa_max-x/(NCAMS-1) for x in (pa_max-pa_min)*np.array(range(NCAMS))])
+    axs_titles = ['At minimum luffing angle',
+                  'At maximum luffing angle',
+                  'At luffing angle from slider']
 
-    sluf = Slider(axluf, 'Luffing angle', 35.0, 85.0, valinit=35.0, valstep=1.0)
+    sluf = Slider(axluf, 'Luffing angle', 35, 85, valinit=35, valstep=1)
     sck = []
     sca = []
-    for i in range(n_cams):
+    for i in range(NCAMS):
         str_pos = "Camera " + str(i+1) + " relative location"
-        sck.append(Slider(axck[i], str_pos, ck_min, ck_max, valinit=cams_kr[i], valstep=0.05))
+        sck.append(Slider(
+            axck[i], str_pos, ck_min, ck_max,
+            valinit=cams_kr[i], valstep=0.05))
         str_ang = "Camera " + str(i+1) + " angle"
-        sca.append(Slider(axca[i], str_ang, ca_min, ca_max, valinit=np.degrees(cams_ang[i]), valstep=5.0))
-    '''
-    sck1 = Slider(axck[0], 'Camera 1 relative location', ck_min, ck_max, valinit=cams_kr[0], valstep=0.05)
-    sca1 = Slider(axca[0], 'Camera 1 angle', ca_min, ca_max, valinit=np.degrees(cams_ang[0]), valstep=5.0)
-    sck2 = Slider(axck[1], 'Camera 2 relative location', ck_min, ck_max, valinit=cams_kr[1], valstep=0.05)
-    sca2 = Slider(axca[1], 'Camera 2 angle', ca_min, ca_max, valinit=np.degrees(cams_ang[1]), valstep=5.0)
-    sck3 = Slider(axck[2], 'Camera 3 relative location', ck_min, ck_max, valinit=cams_kr[2], valstep=0.05)
-    sca3 = Slider(axca[2], 'Camera 3 angle', ca_min, ca_max, valinit=np.degrees(cams_ang[2]), valstep=5.0)
-    '''
-    plotScene(axs[0, 0], luf_min, cams_kr, cams_ang, axs_titles[0])
-    plotScene(axs[0, 1], luf_max, cams_kr, cams_ang, axs_titles[1])
-    plotScene(axs[1, 0], luf_min, cams_kr, cams_ang, axs_titles[2])
+        sca.append(Slider(
+            axca[i], str_ang, ca_min, ca_max,
+            valinit=np.degrees(cams_ang[i]), valstep=5.0))
 
+    plot_scene(axs[0, 0], luf_min, cams_kr, cams_ang, axs_titles[0])
+    plot_scene(axs[0, 1], luf_max, cams_kr, cams_ang, axs_titles[1])
+    plot_scene(axs[1, 0], luf_min, cams_kr, cams_ang, axs_titles[2])
 
     def update(val):
         luf_ang = np.radians(sluf.val)
-        #print(sca)
-        #print([x.val for x in sca])
         cams_ang = np.radians([x.val for x in sca])
         cams_kr = [x.val for x in sck]
-        '''
-        cams_ang = np.radians([sca1.val, sca2.val, sca3.val])
-        cams_kr = [sck1.val, sck2.val, sck3.val]
-        axck1.clear()
-        sck1 = Slider(axck1, 'Camera 1 relative location', ck_min, cams_kr[1], valinit=cams_kr[0], valstep=0.05)
-        axck2.clear()
-        sck2 = Slider(axck2, 'Camera 2 relative location', cams_kr[0], cams_kr[2], valinit=cams_kr[1], valstep=0.05)
-        axck3.clear()
-        sck3 = Slider(axck3, 'Camera 3 relative location', cams_kr[1], ck_max, valinit=cams_kr[2], valstep=0.05)
-        '''
         axs[0, 0].clear()
         axs[0, 1].clear()
         axs[1, 0].clear()
-        plotScene(axs[0, 0], luf_min, cams_kr, cams_ang, axs_titles[0])
-        plotScene(axs[0, 1], luf_max, cams_kr, cams_ang, axs_titles[1])
-        plotScene(axs[1, 0], luf_ang, cams_kr, cams_ang, axs_titles[2])
+        plot_scene(axs[0, 0], luf_min, cams_kr, cams_ang, axs_titles[0])
+        plot_scene(axs[0, 1], luf_max, cams_kr, cams_ang, axs_titles[1])
+        plot_scene(axs[1, 0], luf_ang, cams_kr, cams_ang, axs_titles[2])
         fig.canvas.draw_idle()
 
     sluf.on_changed(update)
-    for i in range(n_cams):
+    for i in range(NCAMS):
         sck[i].on_changed(update)
         sca[i].on_changed(update)
-    '''
-    sck1.on_changed(update)
-    sca1.on_changed(update)
-    sck2.on_changed(update)
-    sca2.on_changed(update)
-    sck3.on_changed(update)
-    sca3.on_changed(update)
-    '''
+
     mng = plt.get_current_fig_manager()
     mng.resize(*mng.window.maxsize())
     plt.show()
 
-if __name__=='__main__':
+
+if __name__ == '__main__':
     main()
