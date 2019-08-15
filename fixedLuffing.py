@@ -9,7 +9,7 @@ tow_h = 60
 jib_l = 68
 cam_hfov = np.radians(0.5*45.4)
 
-def plotScene(ax, luf_ang, cams_kr, cams_ang):
+def plotScene(ax, luf_ang, cams_kr, cams_ang, ax_title):
     ax.plot([0,     0,     0 + jib_l*np.cos(luf_ang)],
             [0, tow_h, tow_h + jib_l*np.sin(luf_ang)],
             color='orange')
@@ -17,6 +17,7 @@ def plotScene(ax, luf_ang, cams_kr, cams_ang):
     for i in range(n_cams):
         plotCam(ax, cams_kr[i], cams_ang[i], luf_ang)
 
+    ax.title.set_text(ax_title)
     ax.grid(True)
     print("\n")
 
@@ -65,15 +66,16 @@ def main():
     ca_max =  45.0
 
     cams_ang = np.radians([0.0, -40.0, -45.0]) 
+    axs_titles = ['At minimum luffing angle','At maximum luffing angle','At luffing angle from slider']
 
     sluf = Slider(axluf, 'Luffing angle', 35.0, 85.0, valinit=35.0, valstep=1.0)
     sca1 = Slider(axca1, 'Camera 1 angle', ca_min, ca_max, valinit=np.degrees(cams_ang[0]), valstep=5.0)
     sca2 = Slider(axca2, 'Camera 2 angle', ca_min, ca_max, valinit=np.degrees(cams_ang[1]), valstep=5.0)
     sca3 = Slider(axca3, 'Camera 3 angle', ca_min, ca_max, valinit=np.degrees(cams_ang[2]), valstep=5.0)
 
-    plotScene(axs[0, 0], luf_min, cams_kr, cams_ang)
-    plotScene(axs[0, 1], luf_max, cams_kr, cams_ang)
-    plotScene(axs[1, 0], luf_min, cams_kr, cams_ang)
+    plotScene(axs[0, 0], luf_min, cams_kr, cams_ang, axs_titles[0])
+    plotScene(axs[0, 1], luf_max, cams_kr, cams_ang, axs_titles[1])
+    plotScene(axs[1, 0], luf_min, cams_kr, cams_ang, axs_titles[2])
 
 
     def update(val):
@@ -82,9 +84,9 @@ def main():
         axs[1, 0].clear()
         luf_ang = np.radians(sluf.val)
         cams_ang = np.radians([sca1.val, sca2.val, sca3.val])
-        plotScene(axs[0, 0], luf_min, cams_kr, cams_ang)
-        plotScene(axs[0, 1], luf_max, cams_kr, cams_ang)
-        plotScene(axs[1, 0], luf_ang, cams_kr, cams_ang)
+        plotScene(axs[0, 0], luf_min, cams_kr, cams_ang, axs_titles[0])
+        plotScene(axs[0, 1], luf_max, cams_kr, cams_ang, axs_titles[1])
+        plotScene(axs[1, 0], luf_ang, cams_kr, cams_ang, axs_titles[2])
         fig.canvas.draw_idle()
 
     sluf.on_changed(update)
