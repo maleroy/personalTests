@@ -57,6 +57,27 @@ def comp_cart_from_sph(r, inc, az):
                      r*np.sin(np.radians(inc))*np.sin(np.radians(az)),
                      r*np.cos(np.radians(inc))])
 
+
+def plot_3d_cylinder(ax, radius, height, elevation=0, resolution=3, color='orange', alpha=0.5, x_center = 0, y_center = 0):
+
+    x = np.linspace(x_center-radius, x_center+radius, resolution)
+    z = np.linspace(elevation, elevation+height, resolution)
+    X, Z = np.meshgrid(x, z)
+
+    Y = np.sqrt(radius**2 - (X - x_center)**2) + y_center # Pythagorean theorem
+
+    ax.plot_surface(X, Y, Z, linewidth=0, color=color, alpha=alpha)
+    ax.plot_surface(X, (2*y_center-Y), Z, linewidth=0, color=color, alpha=alpha)
+
+    floor = Circle((x_center, y_center), radius, color=color, alpha=alpha)
+    ax.add_patch(floor)
+    art3d.pathpatch_2d_to_3d(floor, z=elevation, zdir="z")
+
+    ceiling = Circle((x_center, y_center), radius, color=color, alpha=alpha)
+    ax.add_patch(ceiling)
+    art3d.pathpatch_2d_to_3d(ceiling, z=elevation+height, zdir="z")
+
+
 def update(num, data, line, X, Y, Z):
     global surf
     global circ_arr
@@ -75,7 +96,7 @@ def update(num, data, line, X, Y, Z):
         p = Circle((data[0, num], data[1, num]), h_max,
                    zorder=-1)
 
-        if False:
+        if True:
             ax.add_patch(p)
             art3d.pathpatch_2d_to_3d(p, z=0, zdir="z")
         else:
@@ -108,6 +129,8 @@ Z = R-r_max
 X = (h_max-h_max*R/r_max)*np.cos(P)
 Y = (h_max-h_max*R/r_max)*np.sin(P)
 surf = ax.plot_surface(X, Y, Z, color='g')
+
+plot_3d_cylinder(ax, 5, 50)
 
 ax.set_xlim3d([-lim, lim])
 ax.set_xlabel('X')
