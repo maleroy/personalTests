@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from matplotlib.widgets import Slider
 
-NCAMS = 4
+NCAMS = 3
 TOW_H = 60
 JIB_L = 68
 CAM_HFOV = np.radians(0.5*45.4)
@@ -35,16 +35,23 @@ def plot_cam(cur_ax, cam_kr, cam_ang, luf_ang):
                     TOW_H + cam_kr*JIB_L*np.sin(luf_ang)],
                    color='blue')
 
-    print("Cam @ {:4.2f} with luf_ang {:5.1f}: left border is {:5.1f} and right border is {:5.1f}".format(cam_kr, np.degrees(luf_ang), np.degrees(luf_ang+cam_ang-CAM_HFOV), np.degrees(luf_ang+cam_ang+CAM_HFOV)))
+    print("Cam @ {:4.2f} with luf_ang {:5.1f}: left border is {:5.1f} and "
+          "right border is {:5.1f}".format(
+              cam_kr, np.degrees(luf_ang),
+              np.degrees(luf_ang+cam_ang-CAM_HFOV),
+              np.degrees(luf_ang+cam_ang+CAM_HFOV)))
 
     if (luf_ang+cam_ang-CAM_HFOV) >= fov_limit:
-        print("Cam @ {:4.2f} with luf_ang {:5.1f}: FOV not pointing to the ground!\n".format(cam_kr, np.degrees(luf_ang)))
+        print("Cam @ {:4.2f} with luf_ang {:5.1f}: FOV not pointing to the "
+              "ground!\n".format(cam_kr, np.degrees(luf_ang)))
 
     elif (luf_ang+cam_ang) >= fov_limit:
-        print("Cam @ {:4.2f} with luf_ang {:5.1f}: FOV mid-line pointing above the horizon!\n".format(cam_kr, np.degrees(luf_ang)))
+        print("Cam @ {:4.2f} with luf_ang {:5.1f}: FOV mid-line pointing "
+              "above the horizon!\n".format(cam_kr, np.degrees(luf_ang)))
 
     elif (luf_ang+cam_ang+CAM_HFOV) >= fov_limit:
-        print("Cam @ {:4.2f} with luf_ang {:5.1f}: FOV is surely pretty far from the crane!\n".format(cam_kr, np.degrees(luf_ang)))
+        print("Cam @ {:4.2f} with luf_ang {:5.1f}: FOV is surely pretty far "
+              "from the crane!\n".format(cam_kr, np.degrees(luf_ang)))
 
     else:
         cur_ax.add_patch(
@@ -70,16 +77,19 @@ def main():
     luf_max = np.radians(85)
 
     vert_pos = 0.45
-    axluf = plt.axes([0.7, vert_pos, 0.2, 0.01])
+    vert_low = 0.05
+    hori_pos = 0.60
+    axluf = plt.axes([hori_pos, vert_pos, 0.2, 0.01])
     axck = []
     axca = []
-    vert_pos -= 0.03
+    jump = (vert_pos-vert_low)/(3*NCAMS+2)
+    vert_pos -= jump
     for i in range(NCAMS):
-        vert_pos -= 0.03
-        axck.append(plt.axes([0.7, vert_pos, 0.2, 0.01]))
-        vert_pos -= 0.03
-        axca.append(plt.axes([0.7, vert_pos, 0.2, 0.01]))
-        vert_pos -= 0.03
+        vert_pos -= jump
+        axck.append(plt.axes([hori_pos, vert_pos, 0.2, 0.01]))
+        vert_pos -= jump
+        axca.append(plt.axes([hori_pos, vert_pos, 0.2, 0.01]))
+        vert_pos -= jump
 
     ck_min = 0.0
     ck_max = 1.0
@@ -89,20 +99,21 @@ def main():
     cams_kr = [x/(NCAMS+1) for x in range(1, NCAMS+1)]
     pa_min = -45
     pa_max = 0
-    cams_ang = np.radians([pa_max-x/(NCAMS-1) for x in (pa_max-pa_min)*np.array(range(NCAMS))])
+    cams_ang = np.radians(
+        [pa_max-x/(NCAMS-1) for x in (pa_max-pa_min)*np.array(range(NCAMS))])
     axs_titles = ['At minimum luffing angle',
                   'At maximum luffing angle',
                   'At luffing angle from slider']
 
-    sluf = Slider(axluf, 'Luffing angle', 35, 85, valinit=35, valstep=1)
+    sluf = Slider(axluf, 'Luffing angle ', 35, 85, valinit=35, valstep=1)
     sck = []
     sca = []
     for i in range(NCAMS):
-        str_pos = "Camera " + str(i+1) + " relative location"
+        str_pos = "Cam" + str(i+1) + " rel. loc."
         sck.append(Slider(
             axck[i], str_pos, ck_min, ck_max,
             valinit=cams_kr[i], valstep=0.05))
-        str_ang = "Camera " + str(i+1) + " angle"
+        str_ang = "Cam" + str(i+1) + " angle   "
         sca.append(Slider(
             axca[i], str_ang, ca_min, ca_max,
             valinit=np.degrees(cams_ang[i]), valstep=5.0))
