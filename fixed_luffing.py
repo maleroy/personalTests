@@ -55,7 +55,7 @@ def plot_scene_fv(cur_ax, luf_ang, cams_kr, cams_ang, bldg_h, bldg_d, bldg_w,
                 color='orange')
 
     for i in range(NCAMS):
-        plot_cam_fv(cur_ax, cams_kr[i], cams_ang[i], luf_ang)
+        plot_cam_fv(cur_ax, cams_kr[i], cams_ang[i], luf_ang, bldg_h)
 
     cur_ax.add_patch(Rectangle((bldg_d, 0.0), bldg_w, bldg_h, fc='black',
                                ec=None, alpha=0.6, zorder=-1))
@@ -67,7 +67,7 @@ def plot_scene_fv(cur_ax, luf_ang, cams_kr, cams_ang, bldg_h, bldg_d, bldg_w,
     print("\n")
 
 
-def plot_cam_fv(cur_ax, cam_kr, cam_ang, luf_ang):
+def plot_cam_fv(cur_ax, cam_kr, cam_ang, luf_ang, bldg_h):
     """Plots a single camera in front view
 
     Args:
@@ -136,11 +136,11 @@ def plot_cam_fv(cur_ax, cam_kr, cam_ang, luf_ang):
         cam_x_right_abs = cam_x_abs + cam_x_right_rel
 
         if cam_x_left_abs >= EDGE:
-            print("\t\tCam @ {:4.2f} with luf_ang {:5.1f}: Left FOV on the "
+            print("\tCam @ {:4.2f} with luf_ang {:5.1f}: Left FOV on the "
                   "ground too far from the crane, {:7.2f}!".format(
                       cam_kr, luf_ang_deg, cam_x_left_abs))
         elif cam_x_right_abs >= EDGE:
-            print("\t\tCam @ {:4.2f} with luf_ang {:5.1f}: Right FOV on the "
+            print("\tCam @ {:4.2f} with luf_ang {:5.1f}: Right FOV on the "
                   "ground too far from the crane, {:7.2f}!".format(
                       cam_kr, luf_ang_deg, cam_x_right_abs))
         else:
@@ -150,17 +150,30 @@ def plot_cam_fv(cur_ax, cam_kr, cam_ang, luf_ang):
                           [cam_x_left_abs, 0],
                           [cam_x_right_abs, 0]]),
                 fc=cur_c, ec=None, alpha=ALPHA))
-            print("Cam @ {:4.2f} with luf_ang {:5.1f}: left dist is {:5.1f}[m]"
-                  ", mid dist is {:5.1f}[m] and right dist angle is {:5.1f}"
-                  "[m] ([{:5.1f},{:5.1f},{:5.1f}][cm/pxl])".format(
-                      cam_kr,
-                      luf_ang_deg,
-                      cam_y_rel/np.cos(fov_left),
-                      cam_y_rel/np.cos(fov_mid),
-                      cam_y_rel/np.cos(fov_right),
-                      get_gsd(cam_y_rel/np.cos(fov_left)),
-                      get_gsd(cam_y_rel/np.cos(fov_mid)),
-                      get_gsd(cam_y_rel/np.cos(fov_right))))
+
+            len_left = cam_y_rel/np.cos(fov_left) 
+            len_mid = cam_y_rel/np.cos(fov_mid)
+            len_right = cam_y_rel/np.cos(fov_right)
+            print("\tGND: left: {:5.1f}[m]/{:5.1f}[cm/pxl], mid: {:5.1f}[m]/{:5.1f}"
+                  "[cm/pxl] and right: {:5.1f}[m]/{:5.1f}[cm/pxl]".format(
+                      len_left,
+                      get_gsd(len_left),
+                      len_mid,
+                      get_gsd(len_mid),
+                      len_right,
+                      get_gsd(len_right)))
+
+            len_left = (cam_y_rel-bldg_h)/np.cos(fov_left) 
+            len_mid = (cam_y_rel-bldg_h)/np.cos(fov_mid)
+            len_right = (cam_y_rel-bldg_h)/np.cos(fov_right)
+            print("\tROOF: left: {:5.1f}[m]/{:5.1f}[cm/pxl], mid: {:5.1f}[m]/{:5.1f}"
+                  "[cm/pxl] and right: {:5.1f}[m]/{:5.1f}[cm/pxl]".format(
+                      len_left,
+                      get_gsd(len_left),
+                      len_mid,
+                      get_gsd(len_mid),
+                      len_right,
+                      get_gsd(len_right)))
 
 
 def plot_scene_tv(cur_ax, luf_ang, cams_kr, cams_ang, bldg_h, bldg_d, bldg_w,
@@ -182,7 +195,7 @@ def plot_scene_tv(cur_ax, luf_ang, cams_kr, cams_ang, bldg_h, bldg_d, bldg_w,
                 color='orange')
 
     for i in range(NCAMS):
-        plot_cam_tv(cur_ax, cams_kr[i], cams_ang[i], luf_ang)
+        plot_cam_tv(cur_ax, cams_kr[i], cams_ang[i], luf_ang, bldg_h)
 
     cur_ax.add_patch(
         Wedge((TOW_X, TOW_Y), TOW_X+bldg_d+bldg_w, 0, 180, width=bldg_w,
@@ -195,7 +208,7 @@ def plot_scene_tv(cur_ax, luf_ang, cams_kr, cams_ang, bldg_h, bldg_d, bldg_w,
     print("\n")
 
 
-def plot_cam_tv(cur_ax, cam_kr, cam_ang, luf_ang):
+def plot_cam_tv(cur_ax, cam_kr, cam_ang, luf_ang, bldg_h):
     """Plots a single camera in front view
 
     Args:
@@ -263,11 +276,11 @@ def plot_cam_tv(cur_ax, cam_kr, cam_ang, luf_ang):
         cam_x_right_abs = cam_x_abs + cam_x_right_rel
 
         if cam_x_left_abs >= EDGE:
-            print("\t\tCam @ {:4.2f} with luf_ang {:5.1f}: Left FOV on the "
+            print("\tCam @ {:4.2f} with luf_ang {:5.1f}: Left FOV on the "
                   "ground too far from the crane, {:7.2f}!".format(
                       cam_kr, luf_ang_deg, cam_x_left_abs))
         elif cam_x_right_abs >= EDGE:
-            print("\t\tCam @ {:4.2f} with luf_ang {:5.1f}: Right FOV on the "
+            print("\tCam @ {:4.2f} with luf_ang {:5.1f}: Right FOV on the "
                   "ground too far from the crane, {:7.2f}!".format(
                       cam_kr, luf_ang_deg, cam_x_right_abs))
         else:
@@ -281,20 +294,32 @@ def plot_cam_tv(cur_ax, cam_kr, cam_ang, luf_ang):
             cur_width = dist_far_near if cam_x_left_abs >= 0.0 else None
 
             cur_ax.add_patch(
-                Wedge((TOW_X, TOW_Y), cur_r, 0, 360,
+                Wedge((TOW_X, TOW_Y), cur_r, -90, 90,
                       width=cur_width, fc=cur_c, ec=None, alpha=ALPHA))
-            print("Cam @ {:4.2f} with luf_ang {:5.1f}: left dist is {:5.1f}[m]"
-                  ", mid dist is {:5.1f}[m] and right dist angle is {:5.1f}"
-                  "[m] ([{:5.1f},{:5.1f},{:5.1f}][cm/pxl])".format(
-                      cam_kr,
-                      luf_ang_deg,
-                      cam_y_rel/np.cos(fov_left),
-                      cam_y_rel/np.cos(fov_mid),
-                      cam_y_rel/np.cos(fov_right),
-                      get_gsd(cam_y_rel/np.cos(fov_left)),
-                      get_gsd(cam_y_rel/np.cos(fov_mid)),
-                      get_gsd(cam_y_rel/np.cos(fov_right))))
 
+            len_left = cam_y_rel/np.cos(fov_left) 
+            len_mid = cam_y_rel/np.cos(fov_mid)
+            len_right = cam_y_rel/np.cos(fov_right)
+            print("\tGND: left: {:5.1f}[m]/{:5.1f}[cm/pxl], mid: {:5.1f}[m]/{:5.1f}"
+                  "[cm/pxl] and right: {:5.1f}[m]/{:5.1f}[cm/pxl]".format(
+                      len_left,
+                      get_gsd(len_left),
+                      len_mid,
+                      get_gsd(len_mid),
+                      len_right,
+                      get_gsd(len_right)))
+
+            len_left = (cam_y_rel-bldg_h)/np.cos(fov_left) 
+            len_mid = (cam_y_rel-bldg_h)/np.cos(fov_mid)
+            len_right = (cam_y_rel-bldg_h)/np.cos(fov_right)
+            print("\tROOF: left: {:5.1f}[m]/{:5.1f}[cm/pxl], mid: {:5.1f}[m]/{:5.1f}"
+                  "[cm/pxl] and right: {:5.1f}[m]/{:5.1f}[cm/pxl]".format(
+                      len_left,
+                      get_gsd(len_left),
+                      len_mid,
+                      get_gsd(len_mid),
+                      len_right,
+                      get_gsd(len_right)))
 
 def main():
     """Main function that calls all the rest
