@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from matplotlib.patches import Polygon, Rectangle
-from matplotlib.widgets import Slider
+from matplotlib.widgets import Slider, RadioButtons
 
 NCAMS = 4
 TOW_X = 0
@@ -12,15 +12,15 @@ TOW_Y = 0
 TOW_H = 60
 JIB_L = 68
 CAM_HFOV = np.radians(0.5*45.4)
+USING_BRACKET = False
 BRACKET_ANGLES = [-61.5, -59.0, -56.5, -53.5, -49.5, -45.0, -40.0, -34.0,
                   -27.0, -18.5, -9.5, 0.0, 9.5, 18.5, 27.0, 34.0, 40.0, 45.0,
                   49.5, 53.5, 56.5, 59.0, 61.5]
-USING_BRACKET = False
 
 
-def plot_scene(cur_ax, luf_ang, cams_kr, cams_ang, bldg_h, bldg_d, bldg_w,
-               ax_title):
-    """Plots the desired scene
+def plot_scene_fv(cur_ax, luf_ang, cams_kr, cams_ang, bldg_h, bldg_d, bldg_w,
+                  ax_title):
+    """Plots the desired scene in front view
 
     Args:
         cur_ax ([type]): Subplot to be plotted
@@ -37,7 +37,7 @@ def plot_scene(cur_ax, luf_ang, cams_kr, cams_ang, bldg_h, bldg_d, bldg_w,
                 color='orange')
 
     for i in range(NCAMS):
-        plot_cam(cur_ax, cams_kr[i], cams_ang[i], luf_ang)
+        plot_cam_fv(cur_ax, cams_kr[i], cams_ang[i], luf_ang)
 
     cur_ax.add_patch(Rectangle((bldg_d, 0.0), bldg_w, bldg_h, fc='black',
                                ec=None, alpha=0.6, zorder=-1))
@@ -49,8 +49,8 @@ def plot_scene(cur_ax, luf_ang, cams_kr, cams_ang, bldg_h, bldg_d, bldg_w,
     print("\n")
 
 
-def plot_cam(cur_ax, cam_kr, cam_ang, luf_ang):
-    """Plots a single camera
+def plot_cam_fv(cur_ax, cam_kr, cam_ang, luf_ang):
+    """Plots a single camera in front view
 
     Args:
         cur_ax ([type]): Subplot to be plotted
@@ -103,6 +103,8 @@ def plot_cam(cur_ax, cam_kr, cam_ang, luf_ang):
                   cam_kr, luf_ang_deg, dist_far_near))
 
     else:
+        x_limit = 250.0
+
         cam_r_rel = cam_kr*JIB_L
 
         cam_x_rel = cam_r_rel*np.cos(luf_ang)
@@ -111,11 +113,59 @@ def plot_cam(cur_ax, cam_kr, cam_ang, luf_ang):
         cam_y_rel = TOW_H + cam_r_rel*np.sin(luf_ang)
         cam_y_abs = TOW_Y + cam_y_rel
 
-        cur_ax.add_patch(Polygon(
-            np.array([[cam_x_abs, cam_y_abs],
-                      [cam_x_abs + cam_y_abs*np.tan(fov_left), 0],
-                      [cam_x_abs + cam_y_abs*np.tan(fov_right), 0]]),
-            fc='blue', ec=None, alpha=0.3))
+        cam_x_left_rel = cam_y_rel*np.tan(fov_left)
+        cam_x_right_rel = cam_y_rel*np.tan(fov_right)
+
+        cam_x_left_abs = cam_x_abs + cam_x_left_rel
+        cam_x_right_abs = cam_x_abs + cam_x_right_rel
+
+        if cam_x_left_abs >= x_limit:
+            print("\t\tCam @ {:4.2f} with luf_ang {:5.1f}: Left FOV on the "
+                  "ground too far from the crane, {:7.2f}!".format(
+                      cam_kr, luf_ang_deg, cam_x_left_abs))
+        elif cam_x_right_abs >= x_limit:
+            print("\t\tCam @ {:4.2f} with luf_ang {:5.1f}: Right FOV on the "
+                  "ground too far from the crane, {:7.2f}!".format(
+                      cam_kr, luf_ang_deg, cam_x_right_abs))
+        else:
+            cur_ax.add_patch(Polygon(
+                np.array([[cam_x_abs, cam_y_abs],
+                          [cam_x_left_abs, 0],
+                          [cam_x_right_abs, 0]]),
+                fc='blue', ec=None, alpha=0.3))
+
+
+def plot_scene_tv(cur_ax, luf_ang, cams_kr, cams_ang, bldg_h, bldg_d, bldg_w,
+                  ax_title):
+    """Plots the desired scene in front view
+
+    Args:
+        cur_ax ([type]): Subplot to be plotted
+        luf_ang ([type]): Crane luffing angle [rad]
+        cams_kr ([type]): Array of cameras' locs (rel. to crane length) [-]
+        cams_ang ([type]): Array of cameras' angles (when jib is hor.) [rad]
+        bldg_h ([type]): Bldg height [m]
+        bldg_d ([type]): Bldg distance from crane tower [m]
+        bldg_w ([type]): Bldg width [m]
+        ax_title ([type]): Title of the subplot
+    """
+    cur_ax.plot([TOW_X, TOW_X + JIB_L*np.cos(luf_ang)],
+                [TOW_Y, TOW_Y],
+                color='orange')
+
+    """
+    for i in range(NCAMS):
+        plot_cam_tv(cur_ax, cams_kr[i], cams_ang[i], luf_ang)
+
+    cur_ax.add_patch(Rectangle((bldg_d, 0.0), bldg_w, bldg_h, fc='black',
+                               ec=None, alpha=0.6, zorder=-1))
+
+    """
+    cur_ax.title.set_text(ax_title)
+    cur_ax.set_xlim([-100, 100])
+    cur_ax.set_ylim([-100, 100])
+    cur_ax.grid(True)
+    print("\n")
 
 
 def main():
@@ -151,6 +201,9 @@ def main():
     axbldgd = plt.axes([hori_pos, vert_pos, 0.2, 0.01])
     vert_pos -= jump
     axbldgw = plt.axes([hori_pos, vert_pos, 0.2, 0.01])
+
+    vert_pos -= 3*jump
+    axradfvtv = plt.axes([hori_pos, vert_pos, 0.2, 0.04])
 
     ck_min = 0.0
     ck_max = 1.0
@@ -199,14 +252,19 @@ def main():
     sbldgw = Slider(axbldgw, "Bldg width    ", 0, JIB_L+10,
                     valinit=50.0, valstep=1.0, color='blue')
 
-    plot_scene(axs[0, 0], luf_min, cams_kr, cams_ang, 0.0, 10.0, 50.0,
-               axs_titles[0])
-    plot_scene(axs[0, 1], luf_max, cams_kr, cams_ang, 0.0, 10.0, 50.0,
-               axs_titles[1])
-    plot_scene(axs[1, 0], luf_min, cams_kr, cams_ang, 0.0, 10.0, 50.0,
-               axs_titles[2])
+    radfvtv = RadioButtons(axradfvtv, ("Front view", "Top view"))
 
-    def update():
+    plot_scene_fv(axs[0, 0], luf_min, cams_kr, cams_ang, 0.0, 10.0, 50.0,
+                  axs_titles[0])
+    plot_scene_fv(axs[0, 1], luf_max, cams_kr, cams_ang, 0.0, 10.0, 50.0,
+                  axs_titles[1])
+    plot_scene_fv(axs[1, 0], luf_min, cams_kr, cams_ang, 0.0, 10.0, 50.0,
+                  axs_titles[2])
+
+    def update(val):
+        """Updates the whole figure by clearing all plots and redrawing with
+           new parameters coming from widgets
+        """
         print("UPDATE")
         axs[0, 0].clear()
         axs[0, 1].clear()
@@ -226,16 +284,28 @@ def main():
         bldgd = sbldgd.val
         bldgw = sbldgw.val
 
-        plot_scene(axs[0, 0], luf_min, cams_kr, cams_ang, bldgh, bldgd, bldgw,
-                   axs_titles[0])
-        plot_scene(axs[0, 1], luf_max, cams_kr, cams_ang, bldgh, bldgd, bldgw,
-                   axs_titles[1])
-        plot_scene(axs[1, 0], luf_ang, cams_kr, cams_ang, bldgh, bldgd, bldgw,
-                   axs_titles[2])
+        if radfvtv.value_selected == "Front view":
+            plot_scene_fv(axs[0, 0], luf_min, cams_kr, cams_ang, bldgh, bldgd,
+                          bldgw, axs_titles[0])
+            plot_scene_fv(axs[0, 1], luf_max, cams_kr, cams_ang, bldgh, bldgd,
+                          bldgw, axs_titles[1])
+            plot_scene_fv(axs[1, 0], luf_ang, cams_kr, cams_ang, bldgh, bldgd,
+                          bldgw, axs_titles[2])
+
+        else:
+            plot_scene_tv(axs[0, 0], luf_min, cams_kr, cams_ang, bldgh, bldgd,
+                          bldgw, axs_titles[0])
+            plot_scene_tv(axs[0, 1], luf_max, cams_kr, cams_ang, bldgh, bldgd,
+                          bldgw, axs_titles[1])
+            plot_scene_tv(axs[1, 0], luf_ang, cams_kr, cams_ang, bldgh, bldgd,
+                          bldgw, axs_titles[2])
+
         fig.canvas.draw_idle()
 
-    update()
+    # Initial update now that everything is set up
+    update(None)
 
+    # Make all widgets interactive
     sluf.on_changed(update)
     for i in range(NCAMS):
         sck[i].on_changed(update)
@@ -243,6 +313,7 @@ def main():
     sbldgh.on_changed(update)
     sbldgd.on_changed(update)
     sbldgw.on_changed(update)
+    radfvtv.on_clicked(update)
 
     mng = plt.get_current_fig_manager()
     mng.resize(*mng.window.maxsize())
