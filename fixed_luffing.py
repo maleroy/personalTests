@@ -22,10 +22,10 @@ ALPHA = 1./NCAMS
 
 def get_gsd(pxlh):
     """Returns the GSD value based on pixel height and SODA parameters
-    
+
     Args:
         pxlh ([type]): pixel height in [m]
-    
+
     Returns:
         [type]: float of GSD in [cm/pxl]
     """
@@ -294,6 +294,7 @@ def plot_cam_tv(cur_ax, cam_kr, cam_ang, luf_ang):
                       get_gsd(cam_y_rel/np.cos(fov_left)),
                       get_gsd(cam_y_rel/np.cos(fov_mid)),
                       get_gsd(cam_y_rel/np.cos(fov_right))))
+
 
 def main():
     """Main function that calls all the rest
