@@ -1,3 +1,5 @@
+"""fixed_luffing.py: Simple 2D cov. analysis tool for a single luffing crane
+"""
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -5,6 +7,8 @@ from matplotlib.patches import Polygon, Rectangle
 from matplotlib.widgets import Slider
 
 NCAMS = 4
+TOW_X = 0
+TOW_Y = 0
 TOW_H = 60
 JIB_L = 68
 CAM_HFOV = np.radians(0.5*45.4)
@@ -13,7 +17,21 @@ BRACKET_ANGLES = [-61.5, -59.0, -56.5, -53.5, -49.5, -45.0, -40.0, -34.0,
                   49.5, 53.5, 56.5, 59.0, 61.5]
 USING_BRACKET = False
 
-def plot_scene(cur_ax, luf_ang, cams_kr, cams_ang, bldg_h, bldg_d, bldg_w, ax_title):
+
+def plot_scene(cur_ax, luf_ang, cams_kr, cams_ang, bldg_h, bldg_d, bldg_w,
+               ax_title):
+    """Plots the desired scene
+
+    Args:
+        cur_ax ([type]): Subplot to be plotted
+        luf_ang ([type]): Crane luffing angle [rad]
+        cams_kr ([type]): Array of cameras' locs (rel. to crane length) [-]
+        cams_ang ([type]): Array of cameras' angles (when jib is hor.) [rad]
+        bldg_h ([type]): Bldg height [m]
+        bldg_d ([type]): Bldg distance from crane tower [m]
+        bldg_w ([type]): Bldg width [m]
+        ax_title ([type]): Title of the subplot
+    """
     cur_ax.plot([0, 0, 0 + JIB_L*np.cos(luf_ang)],
                 [0, TOW_H, TOW_H + JIB_L*np.sin(luf_ang)],
                 color='orange')
@@ -22,7 +40,7 @@ def plot_scene(cur_ax, luf_ang, cams_kr, cams_ang, bldg_h, bldg_d, bldg_w, ax_ti
         plot_cam(cur_ax, cams_kr[i], cams_ang[i], luf_ang)
 
     cur_ax.add_patch(Rectangle((bldg_d, 0.0), bldg_w, bldg_h, fc='black',
-        ec=None, alpha=0.6, zorder=-1))
+                               ec=None, alpha=0.6, zorder=-1))
 
     cur_ax.title.set_text(ax_title)
     cur_ax.set_xlim([-200, 200])
@@ -32,6 +50,14 @@ def plot_scene(cur_ax, luf_ang, cams_kr, cams_ang, bldg_h, bldg_d, bldg_w, ax_ti
 
 
 def plot_cam(cur_ax, cam_kr, cam_ang, luf_ang):
+    """Plots a single camera
+
+    Args:
+        cur_ax ([type]): Subplot to be plotted
+        cam_kr ([type]): Camera loc (rel. to crane length) [-]
+        cam_ang ([type]): Camera angle (when jib is hor.) [rad]
+        luf_ang ([type]): Crane luffing angle [rad]
+    """
     cur_ax.scatter([0 + cam_kr*JIB_L*np.cos(luf_ang),
                     0 + cam_kr*JIB_L*np.cos(luf_ang),
                     0 + cam_kr*JIB_L*np.cos(luf_ang)],
@@ -40,44 +66,61 @@ def plot_cam(cur_ax, cam_kr, cam_ang, luf_ang):
                     TOW_H + cam_kr*JIB_L*np.sin(luf_ang)],
                    color='blue')
 
-    print("Cam @ {:4.2f} with luf_ang {:5.1f}: left border is {:5.1f} and "
-          "right border is {:5.1f}".format(
-              cam_kr, np.degrees(luf_ang),
-              np.degrees(luf_ang+cam_ang-CAM_HFOV),
-              np.degrees(luf_ang+cam_ang+CAM_HFOV)))
+    fov_left = luf_ang+cam_ang-CAM_HFOV
+    fov_mid = luf_ang+cam_ang
+    fov_right = luf_ang+cam_ang+CAM_HFOV
 
-    fov_limit = np.radians(60.0)
+    fov_left_deg = np.degrees(fov_left)
+    fov_mid_deg = np.degrees(fov_mid)
+    fov_right_deg = np.degrees(fov_right)
+
+    luf_ang_deg = np.degrees(luf_ang)
+
+    print("Cam @ {:4.2f} with luf_ang {:5.1f}: left FOV is {:5.1f}[°], mid "
+          "FOV is {:5.1f} and right FOV angle is {:5.1f}[°]".format(
+              cam_kr,
+              luf_ang_deg,
+              fov_left_deg,
+              fov_mid_deg,
+              fov_right_deg))
+
+    fov_limit = np.radians(90.0)
     dist_far_near = (TOW_H + cam_kr*JIB_L*np.sin(luf_ang))*(
-        np.tan(luf_ang+cam_ang+CAM_HFOV)-np.tan(luf_ang+cam_ang-CAM_HFOV))
+        np.tan(fov_right)-np.tan(fov_left))
 
-    if (luf_ang+cam_ang-CAM_HFOV) >= fov_limit:
-        print("Cam @ {:4.2f} with luf_ang {:5.1f}: FOV not pointing to the"
-              " ground, {:7.2f}!\n".format(cam_kr, np.degrees(luf_ang), dist_far_near))
+    if fov_left >= fov_limit:
+        print("\tCam @ {:4.2f} with luf_ang {:5.1f}: FOV not pointing to the"
+              " ground, {:7.2f}!".format(cam_kr, luf_ang_deg, dist_far_near))
 
-    elif (luf_ang+cam_ang) >= fov_limit:
-        print("Cam @ {:4.2f} with luf_ang {:5.1f}: FOV mid-line pointing "
-              "above the horizon, {:7.2f}!\n".format(cam_kr, np.degrees(luf_ang), dist_far_near))
+    elif fov_mid >= fov_limit:
+        print("\tCam @ {:4.2f} with luf_ang {:5.1f}: FOV mid-line pointing "
+              "above the horizon, {:7.2f}!".format(
+                  cam_kr, luf_ang_deg, dist_far_near))
 
-    elif (luf_ang+cam_ang+CAM_HFOV) >= fov_limit:
-        print("Cam @ {:4.2f} with luf_ang {:5.1f}: FOV is surely pretty "
-              "far from the crane, {:7.2f}!\n".format(cam_kr, np.degrees(luf_ang), dist_far_near))
+    elif fov_right >= fov_limit:
+        print("\tCam @ {:4.2f} with luf_ang {:5.1f}: FOV is surely pretty "
+              "far from the crane, {:7.2f}!".format(
+                  cam_kr, luf_ang_deg, dist_far_near))
 
     else:
-        cur_ax.add_patch(
-            Polygon(np.array([[0 + cam_kr*JIB_L*np.cos(luf_ang),
-                               TOW_H + cam_kr*JIB_L*np.sin(luf_ang)],
-                              [0 + cam_kr*JIB_L*np.cos(luf_ang) + (
-                                  TOW_H + cam_kr*JIB_L*np.sin(
-                                      luf_ang))*np.tan(
-                                          luf_ang+cam_ang-CAM_HFOV), 0],
-                              [0 + cam_kr*JIB_L*np.cos(luf_ang) + (
-                                  TOW_H + cam_kr*JIB_L*np.sin(
-                                      luf_ang))*np.tan(
-                                          luf_ang+cam_ang+CAM_HFOV), 0]]),
-                    fc='blue', ec=None, alpha=0.3))
+        cam_r_rel = cam_kr*JIB_L
+
+        cam_x_rel = cam_r_rel*np.cos(luf_ang)
+        cam_x_abs = TOW_X + cam_x_rel
+
+        cam_y_rel = TOW_H + cam_r_rel*np.sin(luf_ang)
+        cam_y_abs = TOW_Y + cam_y_rel
+
+        cur_ax.add_patch(Polygon(
+            np.array([[cam_x_abs, cam_y_abs],
+                      [cam_x_abs + cam_y_abs*np.tan(fov_left), 0],
+                      [cam_x_abs + cam_y_abs*np.tan(fov_right), 0]]),
+            fc='blue', ec=None, alpha=0.3))
 
 
 def main():
+    """Main function that calls all the rest
+    """
     fig, axs = plt.subplots(2, 2, sharex=True, sharey=True)
     plt.setp(axs.flat, aspect=1.0)
     plt.subplots_adjust(left=0.1, bottom=0.1, right=0.9, top=0.9)
@@ -108,7 +151,7 @@ def main():
     axbldgd = plt.axes([hori_pos, vert_pos, 0.2, 0.01])
     vert_pos -= jump
     axbldgw = plt.axes([hori_pos, vert_pos, 0.2, 0.01])
-    
+
     ck_min = 0.0
     ck_max = 1.0
 
@@ -156,15 +199,19 @@ def main():
     sbldgw = Slider(axbldgw, "Bldg width    ", 0, JIB_L+10,
                     valinit=50.0, valstep=1.0, color='blue')
 
-    plot_scene(axs[0, 0], luf_min, cams_kr, cams_ang, 0.0, 10.0, 50.0, axs_titles[0])
-    plot_scene(axs[0, 1], luf_max, cams_kr, cams_ang, 0.0, 10.0, 50.0, axs_titles[1])
-    plot_scene(axs[1, 0], luf_min, cams_kr, cams_ang, 0.0, 10.0, 50.0, axs_titles[2])
+    plot_scene(axs[0, 0], luf_min, cams_kr, cams_ang, 0.0, 10.0, 50.0,
+               axs_titles[0])
+    plot_scene(axs[0, 1], luf_max, cams_kr, cams_ang, 0.0, 10.0, 50.0,
+               axs_titles[1])
+    plot_scene(axs[1, 0], luf_min, cams_kr, cams_ang, 0.0, 10.0, 50.0,
+               axs_titles[2])
 
-    def update(val):
+    def update():
+        print("UPDATE")
         axs[0, 0].clear()
         axs[0, 1].clear()
         axs[1, 0].clear()
-        
+
         if USING_BRACKET:
             for i in range(NCAMS):
                 cur_sca = sca[i].val
@@ -179,12 +226,15 @@ def main():
         bldgd = sbldgd.val
         bldgw = sbldgw.val
 
-        plot_scene(axs[0, 0], luf_min, cams_kr, cams_ang, bldgh, bldgd, bldgw, axs_titles[0])
-        plot_scene(axs[0, 1], luf_max, cams_kr, cams_ang, bldgh, bldgd, bldgw, axs_titles[1])
-        plot_scene(axs[1, 0], luf_ang, cams_kr, cams_ang, bldgh, bldgd, bldgw, axs_titles[2])
+        plot_scene(axs[0, 0], luf_min, cams_kr, cams_ang, bldgh, bldgd, bldgw,
+                   axs_titles[0])
+        plot_scene(axs[0, 1], luf_max, cams_kr, cams_ang, bldgh, bldgd, bldgw,
+                   axs_titles[1])
+        plot_scene(axs[1, 0], luf_ang, cams_kr, cams_ang, bldgh, bldgd, bldgw,
+                   axs_titles[2])
         fig.canvas.draw_idle()
 
-    update(None)
+    update()
 
     sluf.on_changed(update)
     for i in range(NCAMS):
