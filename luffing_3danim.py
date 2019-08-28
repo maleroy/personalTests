@@ -67,9 +67,9 @@ def plot_3d_cylinder(ax, radius, height, elevation=0, resolution=3, color='orang
     Y = np.sqrt(radius**2 - (X - x_center)**2) + y_center # Pythagorean theorem
 
     ax.plot_surface(X, Y, Z, linewidth=0, color=color, alpha=alpha)
-    ax.plot_surface(X, (2*y_center-Y), Z, linewidth=0, color=color, alpha=alpha)
+    ax.plot_surface(X, (2*y_center-Y), Z, linewidth=0, color=color, alpha=alpha, zorder=100)
 
-    floor = Circle((x_center, y_center), radius, color=color, alpha=alpha)
+    floor = Circle((x_center, y_center), radius, color=color, alpha=alpha, zorder=80)
     ax.add_patch(floor)
     art3d.pathpatch_2d_to_3d(floor, z=elevation, zdir="z")
 
@@ -94,7 +94,7 @@ def update(num, data, line, X, Y, Z):
 
     if num%10 == 0:
         p = Circle((data[0, num], data[1, num]), h_max,
-                   zorder=-1)
+                   alpha=0.1, zorder=-1)
 
         if True:
             ax.add_patch(p)
@@ -109,7 +109,7 @@ def update(num, data, line, X, Y, Z):
     Z = data[2, num] + R-r_max
     X = data[0, num] + (h_max-h_max*R/r_max)*np.cos(P)
     Y = data[1, num] + (h_max-h_max*R/r_max)*np.sin(P)
-    surf = ax.plot_surface(X, Y, Z, color='g', zorder=1)
+    surf = ax.plot_surface(X, Y, Z, color='g', zorder=1000)
 
 N = 1000
 data = gen(N)

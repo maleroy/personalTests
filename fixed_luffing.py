@@ -20,6 +20,22 @@ EDGE = 300
 ALPHA = 1./NCAMS
 
 
+def get_gsd(pxlh):
+    """Returns the GSD value based on pixel height and SODA parameters
+    
+    Args:
+        pxlh ([type]): pixel height in [m]
+    
+    Returns:
+        [type]: float of GSD in [cm/pxl]
+    """
+    sensor_width = 25.4
+    focal_length = 10.5199
+    image_width = 5496
+    image_height = 3672
+    return (sensor_width*pxlh*100)/(focal_length*image_width)
+
+
 def plot_scene_fv(cur_ax, luf_ang, cams_kr, cams_ang, bldg_h, bldg_d, bldg_w,
                   ax_title):
     """Plots the desired scene in front view
@@ -134,6 +150,17 @@ def plot_cam_fv(cur_ax, cam_kr, cam_ang, luf_ang):
                           [cam_x_left_abs, 0],
                           [cam_x_right_abs, 0]]),
                 fc=cur_c, ec=None, alpha=ALPHA))
+            print("Cam @ {:4.2f} with luf_ang {:5.1f}: left dist is {:5.1f}[m]"
+                  ", mid dist is {:5.1f}[m] and right dist angle is {:5.1f}"
+                  "[m] ([{:5.1f},{:5.1f},{:5.1f}][cm/pxl])".format(
+                      cam_kr,
+                      luf_ang_deg,
+                      cam_y_rel/np.cos(fov_left),
+                      cam_y_rel/np.cos(fov_mid),
+                      cam_y_rel/np.cos(fov_right),
+                      get_gsd(cam_y_rel/np.cos(fov_left)),
+                      get_gsd(cam_y_rel/np.cos(fov_mid)),
+                      get_gsd(cam_y_rel/np.cos(fov_right))))
 
 
 def plot_scene_tv(cur_ax, luf_ang, cams_kr, cams_ang, bldg_h, bldg_d, bldg_w,
@@ -256,7 +283,17 @@ def plot_cam_tv(cur_ax, cam_kr, cam_ang, luf_ang):
             cur_ax.add_patch(
                 Wedge((TOW_X, TOW_Y), cur_r, 0, 360,
                       width=cur_width, fc=cur_c, ec=None, alpha=ALPHA))
-
+            print("Cam @ {:4.2f} with luf_ang {:5.1f}: left dist is {:5.1f}[m]"
+                  ", mid dist is {:5.1f}[m] and right dist angle is {:5.1f}"
+                  "[m] ([{:5.1f},{:5.1f},{:5.1f}][cm/pxl])".format(
+                      cam_kr,
+                      luf_ang_deg,
+                      cam_y_rel/np.cos(fov_left),
+                      cam_y_rel/np.cos(fov_mid),
+                      cam_y_rel/np.cos(fov_right),
+                      get_gsd(cam_y_rel/np.cos(fov_left)),
+                      get_gsd(cam_y_rel/np.cos(fov_mid)),
+                      get_gsd(cam_y_rel/np.cos(fov_right))))
 
 def main():
     """Main function that calls all the rest
