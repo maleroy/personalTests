@@ -16,6 +16,8 @@ USING_BRACKET = False
 BRACKET_ANGLES = [-61.5, -59.0, -56.5, -53.5, -49.5, -45.0, -40.0, -34.0,
                   -27.0, -18.5, -9.5, 0.0, 9.5, 18.5, 27.0, 34.0, 40.0, 45.0,
                   49.5, 53.5, 56.5, 59.0, 61.5]
+EDGE = 300
+ALPHA = 1./NCAMS
 
 
 def plot_scene_fv(cur_ax, luf_ang, cams_kr, cams_ang, bldg_h, bldg_d, bldg_w,
@@ -43,8 +45,8 @@ def plot_scene_fv(cur_ax, luf_ang, cams_kr, cams_ang, bldg_h, bldg_d, bldg_w,
                                ec=None, alpha=0.6, zorder=-1))
 
     cur_ax.title.set_text(ax_title)
-    cur_ax.set_xlim([-200, 200])
-    cur_ax.set_ylim([-10, 200])
+    cur_ax.set_xlim([-0.5*EDGE, EDGE])
+    cur_ax.set_ylim([-10, TOW_H+JIB_L+10])
     cur_ax.grid(True)
     print("\n")
 
@@ -103,8 +105,6 @@ def plot_cam_fv(cur_ax, cam_kr, cam_ang, luf_ang):
                   cam_kr, luf_ang_deg, dist_far_near))
 
     else:
-        x_limit = 250.0
-
         cam_r_rel = cam_kr*JIB_L
 
         cam_x_rel = cam_r_rel*np.cos(luf_ang)
@@ -119,20 +119,21 @@ def plot_cam_fv(cur_ax, cam_kr, cam_ang, luf_ang):
         cam_x_left_abs = cam_x_abs + cam_x_left_rel
         cam_x_right_abs = cam_x_abs + cam_x_right_rel
 
-        if cam_x_left_abs >= x_limit:
+        if cam_x_left_abs >= EDGE:
             print("\t\tCam @ {:4.2f} with luf_ang {:5.1f}: Left FOV on the "
                   "ground too far from the crane, {:7.2f}!".format(
                       cam_kr, luf_ang_deg, cam_x_left_abs))
-        elif cam_x_right_abs >= x_limit:
+        elif cam_x_right_abs >= EDGE:
             print("\t\tCam @ {:4.2f} with luf_ang {:5.1f}: Right FOV on the "
                   "ground too far from the crane, {:7.2f}!".format(
                       cam_kr, luf_ang_deg, cam_x_right_abs))
         else:
+            cur_c = 'b' if cam_x_right_abs >= np.abs(cam_x_left_abs) else 'r'
             cur_ax.add_patch(Polygon(
                 np.array([[cam_x_abs, cam_y_abs],
                           [cam_x_left_abs, 0],
                           [cam_x_right_abs, 0]]),
-                fc='blue', ec=None, alpha=0.3))
+                fc=cur_c, ec=None, alpha=ALPHA))
 
 
 def plot_scene_tv(cur_ax, luf_ang, cams_kr, cams_ang, bldg_h, bldg_d, bldg_w,
@@ -157,12 +158,12 @@ def plot_scene_tv(cur_ax, luf_ang, cams_kr, cams_ang, bldg_h, bldg_d, bldg_w,
         plot_cam_tv(cur_ax, cams_kr[i], cams_ang[i], luf_ang)
 
     cur_ax.add_patch(
-        Wedge((TOW_X, TOW_Y), TOW_X+bldg_d+bldg_w, 0, 360, width=bldg_w,
+        Wedge((TOW_X, TOW_Y), TOW_X+bldg_d+bldg_w, 0, 180, width=bldg_w,
               fc='black', ec=None, alpha=0.6, zorder=-1))
 
     cur_ax.title.set_text(ax_title)
-    cur_ax.set_xlim([-200, 200])
-    cur_ax.set_ylim([-200, 200])
+    cur_ax.set_xlim([-EDGE, EDGE])
+    cur_ax.set_ylim([-EDGE, EDGE])
     cur_ax.grid(True)
     print("\n")
 
@@ -221,15 +222,12 @@ def plot_cam_tv(cur_ax, cam_kr, cam_ang, luf_ang):
                   cam_kr, luf_ang_deg, dist_far_near))
 
     else:
-        x_limit = 250.0
-
         cam_r_rel = cam_kr*JIB_L
 
         cam_x_rel = cam_r_rel*np.cos(luf_ang)
         cam_x_abs = TOW_X + cam_x_rel
 
         cam_y_rel = TOW_H + cam_r_rel*np.sin(luf_ang)
-        cam_y_abs = TOW_Y + cam_y_rel
 
         cam_x_left_rel = cam_y_rel*np.tan(fov_left)
         cam_x_right_rel = cam_y_rel*np.tan(fov_right)
@@ -237,18 +235,27 @@ def plot_cam_tv(cur_ax, cam_kr, cam_ang, luf_ang):
         cam_x_left_abs = cam_x_abs + cam_x_left_rel
         cam_x_right_abs = cam_x_abs + cam_x_right_rel
 
-        if cam_x_left_abs >= x_limit:
+        if cam_x_left_abs >= EDGE:
             print("\t\tCam @ {:4.2f} with luf_ang {:5.1f}: Left FOV on the "
                   "ground too far from the crane, {:7.2f}!".format(
                       cam_kr, luf_ang_deg, cam_x_left_abs))
-        elif cam_x_right_abs >= x_limit:
+        elif cam_x_right_abs >= EDGE:
             print("\t\tCam @ {:4.2f} with luf_ang {:5.1f}: Right FOV on the "
                   "ground too far from the crane, {:7.2f}!".format(
                       cam_kr, luf_ang_deg, cam_x_right_abs))
         else:
+            if cam_x_right_abs >= np.abs(cam_x_left_abs):
+                cur_r = cam_x_right_abs
+                cur_c = 'blue'
+            else:
+                cur_r = np.abs(cam_x_left_abs)
+                cur_c = 'red'
+
+            cur_width = dist_far_near if cam_x_left_abs >= 0.0 else None
+
             cur_ax.add_patch(
-                Wedge((TOW_X, TOW_Y), cam_x_right_abs, 0, 360,
-                      width=dist_far_near, fc='blue', ec=None, alpha=0.3))
+                Wedge((TOW_X, TOW_Y), cur_r, 0, 360,
+                      width=cur_width, fc=cur_c, ec=None, alpha=ALPHA))
 
 
 def main():
