@@ -3,7 +3,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from matplotlib.patches import Polygon, Rectangle
+from matplotlib.patches import Polygon, Rectangle, Wedge
 from matplotlib.widgets import Slider, RadioButtons
 
 NCAMS = 4
@@ -153,19 +153,102 @@ def plot_scene_tv(cur_ax, luf_ang, cams_kr, cams_ang, bldg_h, bldg_d, bldg_w,
                 [TOW_Y, TOW_Y],
                 color='orange')
 
-    """
     for i in range(NCAMS):
         plot_cam_tv(cur_ax, cams_kr[i], cams_ang[i], luf_ang)
 
-    cur_ax.add_patch(Rectangle((bldg_d, 0.0), bldg_w, bldg_h, fc='black',
-                               ec=None, alpha=0.6, zorder=-1))
+    cur_ax.add_patch(
+        Wedge((TOW_X, TOW_Y), TOW_X+bldg_d+bldg_w, 0, 360, width=bldg_w,
+              fc='black', ec=None, alpha=0.6, zorder=-1))
 
-    """
     cur_ax.title.set_text(ax_title)
-    cur_ax.set_xlim([-100, 100])
-    cur_ax.set_ylim([-100, 100])
+    cur_ax.set_xlim([-200, 200])
+    cur_ax.set_ylim([-200, 200])
     cur_ax.grid(True)
     print("\n")
+
+
+def plot_cam_tv(cur_ax, cam_kr, cam_ang, luf_ang):
+    """Plots a single camera in front view
+
+    Args:
+        cur_ax ([type]): Subplot to be plotted
+        cam_kr ([type]): Camera loc (rel. to crane length) [-]
+        cam_ang ([type]): Camera angle (when jib is hor.) [rad]
+        luf_ang ([type]): Crane luffing angle [rad]
+    """
+    cur_ax.scatter([TOW_X + cam_kr*JIB_L*np.cos(luf_ang),
+                    TOW_X + cam_kr*JIB_L*np.cos(luf_ang),
+                    TOW_X + cam_kr*JIB_L*np.cos(luf_ang)],
+                   [0,
+                    0,
+                    0],
+                   color='blue')
+
+    fov_left = luf_ang+cam_ang-CAM_HFOV
+    fov_mid = luf_ang+cam_ang
+    fov_right = luf_ang+cam_ang+CAM_HFOV
+
+    fov_left_deg = np.degrees(fov_left)
+    fov_mid_deg = np.degrees(fov_mid)
+    fov_right_deg = np.degrees(fov_right)
+
+    luf_ang_deg = np.degrees(luf_ang)
+
+    print("Cam @ {:4.2f} with luf_ang {:5.1f}: left FOV is {:5.1f}[°], mid "
+          "FOV is {:5.1f} and right FOV angle is {:5.1f}[°]".format(
+              cam_kr,
+              luf_ang_deg,
+              fov_left_deg,
+              fov_mid_deg,
+              fov_right_deg))
+
+    fov_limit = np.radians(90.0)
+    dist_far_near = (TOW_H + cam_kr*JIB_L*np.sin(luf_ang))*(
+        np.tan(fov_right)-np.tan(fov_left))
+
+    if fov_left >= fov_limit:
+        print("\tCam @ {:4.2f} with luf_ang {:5.1f}: FOV not pointing to the"
+              " ground, {:7.2f}!".format(cam_kr, luf_ang_deg, dist_far_near))
+
+    elif fov_mid >= fov_limit:
+        print("\tCam @ {:4.2f} with luf_ang {:5.1f}: FOV mid-line pointing "
+              "above the horizon, {:7.2f}!".format(
+                  cam_kr, luf_ang_deg, dist_far_near))
+
+    elif fov_right >= fov_limit:
+        print("\tCam @ {:4.2f} with luf_ang {:5.1f}: FOV is surely pretty "
+              "far from the crane, {:7.2f}!".format(
+                  cam_kr, luf_ang_deg, dist_far_near))
+
+    else:
+        x_limit = 250.0
+
+        cam_r_rel = cam_kr*JIB_L
+
+        cam_x_rel = cam_r_rel*np.cos(luf_ang)
+        cam_x_abs = TOW_X + cam_x_rel
+
+        cam_y_rel = TOW_H + cam_r_rel*np.sin(luf_ang)
+        cam_y_abs = TOW_Y + cam_y_rel
+
+        cam_x_left_rel = cam_y_rel*np.tan(fov_left)
+        cam_x_right_rel = cam_y_rel*np.tan(fov_right)
+
+        cam_x_left_abs = cam_x_abs + cam_x_left_rel
+        cam_x_right_abs = cam_x_abs + cam_x_right_rel
+
+        if cam_x_left_abs >= x_limit:
+            print("\t\tCam @ {:4.2f} with luf_ang {:5.1f}: Left FOV on the "
+                  "ground too far from the crane, {:7.2f}!".format(
+                      cam_kr, luf_ang_deg, cam_x_left_abs))
+        elif cam_x_right_abs >= x_limit:
+            print("\t\tCam @ {:4.2f} with luf_ang {:5.1f}: Right FOV on the "
+                  "ground too far from the crane, {:7.2f}!".format(
+                      cam_kr, luf_ang_deg, cam_x_right_abs))
+        else:
+            cur_ax.add_patch(
+                Wedge((TOW_X, TOW_Y), cam_x_right_abs, 0, 360,
+                      width=dist_far_near, fc='blue', ec=None, alpha=0.3))
 
 
 def main():
@@ -202,8 +285,8 @@ def main():
     vert_pos -= jump
     axbldgw = plt.axes([hori_pos, vert_pos, 0.2, 0.01])
 
-    vert_pos -= 3*jump
-    axradfvtv = plt.axes([hori_pos, vert_pos, 0.2, 0.04])
+    vert_pos -= 4*jump
+    axradfvtv = plt.axes([hori_pos, vert_pos, 0.2, 0.06])
 
     ck_min = 0.0
     ck_max = 1.0
