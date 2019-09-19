@@ -6,11 +6,11 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon, Rectangle, Wedge
 from matplotlib.widgets import Slider, RadioButtons
 
-NCAMS = 4
+NCAMS = 5
 TOW_X = 0
 TOW_Y = 0
-TOW_H = 60
-JIB_L = 68
+TOW_H = 43.6  # 60
+JIB_L = 61.07  # 68
 CAM_HFOV = np.radians(0.5*45.4)
 USING_BRACKET = False
 BRACKET_ANGLES = [-61.5, -59.0, -56.5, -53.5, -49.5, -45.0, -40.0, -34.0,
@@ -18,6 +18,7 @@ BRACKET_ANGLES = [-61.5, -59.0, -56.5, -53.5, -49.5, -45.0, -40.0, -34.0,
                   49.5, 53.5, 56.5, 59.0, 61.5]
 EDGE = 300
 ALPHA = 1./NCAMS
+EDF = True
 
 
 def get_gsd(pxlh):
@@ -151,7 +152,7 @@ def plot_cam_fv(cur_ax, cam_kr, cam_ang, luf_ang, bldg_h):
                           [cam_x_right_abs, 0]]),
                 fc=cur_c, ec=None, alpha=ALPHA))
 
-            len_left = cam_y_rel/np.cos(fov_left) 
+            len_left = cam_y_rel/np.cos(fov_left)
             len_mid = cam_y_rel/np.cos(fov_mid)
             len_right = cam_y_rel/np.cos(fov_right)
             print("\tGND: left: {:5.1f}[m]/{:5.1f}[cm/pxl], mid: {:5.1f}[m]/{:5.1f}"
@@ -163,7 +164,7 @@ def plot_cam_fv(cur_ax, cam_kr, cam_ang, luf_ang, bldg_h):
                       len_right,
                       get_gsd(len_right)))
 
-            len_left = (cam_y_rel-bldg_h)/np.cos(fov_left) 
+            len_left = (cam_y_rel-bldg_h)/np.cos(fov_left)
             len_mid = (cam_y_rel-bldg_h)/np.cos(fov_mid)
             len_right = (cam_y_rel-bldg_h)/np.cos(fov_right)
             print("\tROOF: left: {:5.1f}[m]/{:5.1f}[cm/pxl], mid: {:5.1f}[m]/{:5.1f}"
@@ -297,7 +298,7 @@ def plot_cam_tv(cur_ax, cam_kr, cam_ang, luf_ang, bldg_h):
                 Wedge((TOW_X, TOW_Y), cur_r, -90, 90,
                       width=cur_width, fc=cur_c, ec=None, alpha=ALPHA))
 
-            len_left = cam_y_rel/np.cos(fov_left) 
+            len_left = cam_y_rel/np.cos(fov_left)
             len_mid = cam_y_rel/np.cos(fov_mid)
             len_right = cam_y_rel/np.cos(fov_right)
             print("\tGND: left: {:5.1f}[m]/{:5.1f}[cm/pxl], mid: {:5.1f}[m]/{:5.1f}"
@@ -309,7 +310,7 @@ def plot_cam_tv(cur_ax, cam_kr, cam_ang, luf_ang, bldg_h):
                       len_right,
                       get_gsd(len_right)))
 
-            len_left = (cam_y_rel-bldg_h)/np.cos(fov_left) 
+            len_left = (cam_y_rel-bldg_h)/np.cos(fov_left)
             len_mid = (cam_y_rel-bldg_h)/np.cos(fov_mid)
             len_right = (cam_y_rel-bldg_h)/np.cos(fov_right)
             print("\tROOF: left: {:5.1f}[m]/{:5.1f}[cm/pxl], mid: {:5.1f}[m]/{:5.1f}"
@@ -320,6 +321,7 @@ def plot_cam_tv(cur_ax, cam_kr, cam_ang, luf_ang, bldg_h):
                       get_gsd(len_mid),
                       len_right,
                       get_gsd(len_right)))
+
 
 def main():
     """Main function that calls all the rest
@@ -361,7 +363,10 @@ def main():
     ck_min = 0.0
     ck_max = 1.0
 
-    cams_kr = [x/(NCAMS+1) for x in range(1, NCAMS+1)]
+    if EDF:
+        cams_kr = [x/61.07 for x in [9.28, 19.63, 29.98, 40.33, 50.68]]
+    else:
+        cams_kr = [x/(NCAMS+1) for x in range(1, NCAMS+1)]
 
     if USING_BRACKET:
         ca_min = 0
@@ -372,6 +377,7 @@ def main():
 
     pa_min = -45
     pa_max = 0
+
     cams_ang = np.radians(
         [pa_max-x/(NCAMS-1) for x in (pa_max-pa_min)*np.array(range(NCAMS))])
 
@@ -387,7 +393,7 @@ def main():
         str_pos = "Cam" + str(i+1) + " rel. loc."
         sck.append(Slider(
             axck[i], str_pos, ck_min, ck_max,
-            valinit=cams_kr[i], valstep=0.05, color="blue"))
+            valinit=cams_kr[i], valstep=0.01, color="blue"))
         str_ang = "Cam" + str(i+1) + " angle   "
         if USING_BRACKET:
             sca.append(Slider(
@@ -398,12 +404,12 @@ def main():
                 axca[i], str_ang, ca_min, ca_max,
                 valinit=np.degrees(cams_ang[i]), valstep=10.0, color="blue"))
 
-    sbldgh = Slider(axbldgh, "Bldg height   ", 0, TOW_H-10,
-                    valinit=0.0, valstep=1.0, color='blue')
-    sbldgd = Slider(axbldgd, "Bldg distance ", 0, JIB_L+10,
-                    valinit=10.0, valstep=1.0, color='blue')
-    sbldgw = Slider(axbldgw, "Bldg width    ", 0, JIB_L+10,
+    sbldgh = Slider(axbldgh, "Bldg height   ", 0, 50,
                     valinit=50.0, valstep=1.0, color='blue')
+    sbldgd = Slider(axbldgd, "Bldg distance ", 0, JIB_L+10,
+                    valinit=21.0, valstep=1.0, color='blue')
+    sbldgw = Slider(axbldgw, "Bldg width    ", 0, JIB_L+10,
+                    valinit=55.0, valstep=1.0, color='blue')
 
     radfvtv = RadioButtons(axradfvtv, ("Front view", "Top view"))
 
