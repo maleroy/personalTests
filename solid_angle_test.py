@@ -19,6 +19,7 @@ class Crane(object):
         self.tow_x = 0.
         self.tow_y = 0.
         self.tow_z = 0.
+
         self.tow_h = 43.6  # 60
         self.jib_l = 61.07  # 68
 
@@ -49,11 +50,11 @@ def main():
     theta_l = np.linspace(0., 90., myc.n_sect_3d+1)
 
     r_s = myc.jib_l
-    phi_init = 60
-    theta_init = 33.75
+    phi_init = 0  # 60
+    theta_init = 90  # 33.75
 
     fig = plt.figure(figsize=(6, 6))
-    my_ax = fig.add_subplot(111, projection='3d')
+    my_ax = fig.add_subplot(111, projection='3d', proj_type = 'ortho')
 
     axphi = plt.axes([0.1, 0.15, 0.2, 0.01])
     sphi = Slider(axphi, 'Azimuthal angle (phi)', phi_l[0], phi_l[-1],
@@ -83,7 +84,7 @@ def main():
     p_y += myc.tow_y
     p_z += myc.tow_z + myc.tow_h
 
-    plot_all(my_ax, myc, msh_x, msh_y, msh_z, p_x, p_y, p_z)
+    plot_all(my_ax, myc, msh_x, msh_y, msh_z, p_x, p_y, p_z, phi_init)
 
     def update(val):
         my_ax.clear()
@@ -111,7 +112,7 @@ def main():
         p_y += myc.tow_y
         p_z += myc.tow_z + myc.tow_h
 
-        plot_all(my_ax, myc, msh_x, msh_y, msh_z, p_x, p_y, p_z)
+        plot_all(my_ax, myc, msh_x, msh_y, msh_z, p_x, p_y, p_z, new_phi)
 
         fig.canvas.draw_idle()
 
@@ -121,7 +122,8 @@ def main():
     sthet.on_changed(update)
     sphi.on_changed(update)
 
-    my_ax.view_init(45, 0)
+    #my_ax.view_init(45, 0)
+    my_ax.view_init(0, 90)
     set_axes_equal(my_ax)
 
     def press(event):
@@ -189,7 +191,7 @@ def get_interval(lst, val):
     sys.exit()
 
 
-def plot_all(my_ax, myc, msh_x, msh_y, msh_z, p_x, p_y, p_z):
+def plot_all(my_ax, myc, msh_x, msh_y, msh_z, p_x, p_y, p_z, cur_phi):
     """Plots a 3D surface as well as the line from center to current point
 
     Args:
@@ -205,7 +207,37 @@ def plot_all(my_ax, myc, msh_x, msh_y, msh_z, p_x, p_y, p_z):
     my_ax.plot(
         [myc.tow_x, myc.tow_x, p_x], [myc.tow_y, myc.tow_y, p_y],
         [myc.tow_z, myc.tow_z+myc.tow_h, p_z], c="green")
-    my_ax.scatter(p_x, p_y, p_z, s=50, c="green")
+    my_ax.scatter([p_x, p_x], [p_y, p_y], [0, p_z], s=50, c="green")
+
+    delta_h = p_z - 0
+    delta_r = delta_h*np.tan(np.radians(0.5*45.4))
+    delta_t = delta_h*np.tan(np.radians(0.5*64.2))
+    delta_m = np.sqrt(delta_r**2+delta_t**2)
+    hfov_d = np.degrees(np.arctan2(delta_m, delta_h))
+
+    p_r = np.sqrt(p_x**2+p_y**2)
+
+    pxs = [(p_r - delta_r)*np.cos(np.radians(cur_phi)),
+           (p_r + delta_r)*np.cos(np.radians(cur_phi)),
+           p_x - delta_t*np.sin(np.radians(cur_phi)),
+           p_x + delta_t*np.sin(np.radians(cur_phi))]
+    pys = [(p_r - delta_r)*np.sin(np.radians(cur_phi)),
+           (p_r + delta_r)*np.sin(np.radians(cur_phi)),
+           p_y + delta_t*np.cos(np.radians(cur_phi)),
+           p_y - delta_t*np.cos(np.radians(cur_phi))]
+    pzs = [0, 0, 0, 0]
+    my_ax.scatter(pxs, pys, pzs, s=50, c="green")
+
+    pxs = [p_r*np.cos(np.radians(cur_phi))-delta_m*np.sin(np.radians(hfov_d+cur_phi)),
+           p_r*np.cos(np.radians(cur_phi))+delta_m*np.sin(np.radians(hfov_d-cur_phi)),
+           p_r*np.cos(np.radians(cur_phi))-delta_m*np.sin(np.radians(hfov_d-cur_phi)),
+           p_r*np.cos(np.radians(cur_phi))+delta_m*np.sin(np.radians(hfov_d+cur_phi))]
+    pys = [p_r*np.sin(np.radians(cur_phi))+delta_m*np.cos(np.radians(hfov_d+cur_phi)),
+           p_r*np.sin(np.radians(cur_phi))+delta_m*np.cos(np.radians(hfov_d-cur_phi)),
+           p_r*np.sin(np.radians(cur_phi))-delta_m*np.cos(np.radians(hfov_d-cur_phi)),
+           p_r*np.sin(np.radians(cur_phi))-delta_m*np.cos(np.radians(hfov_d+cur_phi))]
+    pzs = [0, 0, 0, 0]
+    my_ax.scatter(pxs, pys, pzs, s=50, c="blue")
 
     my_ax.set_xlabel('X axis')
     my_ax.set_ylabel('Y axis')
