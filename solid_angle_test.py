@@ -6,15 +6,51 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from matplotlib.widgets import Slider
+from mpl_toolkits.mplot3d import axes3d
 
+TOW_X = 0
+TOW_Y = 0
+TOW_H = 43.6  # 60
+JIB_L = 61.07  # 68
 
 N_SECT_2D = 12
 I_SECT_2D = 360./N_SECT_2D
-N_SECT_3D = 8
-I_SECT_3D = 180./N_SECT_3D
+N_SECT_3D = 4
+I_SECT_3D = 90./N_SECT_3D
+
 N_WIREFRAME = 3
+
 N_SECT_TOT = N_SECT_2D*N_SECT_3D
 SECT_PASSED = np.zeros((N_SECT_2D, N_SECT_3D), dtype=bool)
+
+
+def set_axes_equal(ax):
+    '''Make axes of 3D plot have equal scale so that spheres appear as spheres,
+    cubes as cubes, etc..  This is one possible solution to Matplotlib's
+    ax.set_aspect('equal') and ax.axis('equal') not working for 3D.
+
+    Input
+      ax: a matplotlib axis, e.g., as output from plt.gca().
+    '''
+
+    x_limits = ax.get_xlim3d()
+    y_limits = ax.get_ylim3d()
+    z_limits = ax.get_zlim3d()
+
+    x_range = abs(x_limits[1] - x_limits[0])
+    x_middle = np.mean(x_limits)
+    y_range = abs(y_limits[1] - y_limits[0])
+    y_middle = np.mean(y_limits)
+    z_range = abs(z_limits[1] - z_limits[0])
+    z_middle = np.mean(z_limits)
+
+    # The plot bounding box is a sphere in the sense of the infinity
+    # norm, hence I call half the max range the plot radius.
+    plot_radius = 0.5*max([x_range, y_range, z_range])
+
+    ax.set_xlim3d([x_middle - plot_radius, x_middle + plot_radius])
+    ax.set_ylim3d([y_middle - plot_radius, y_middle + plot_radius])
+    ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
 
 
 def sph2car(r_s, phi, theta):
@@ -47,17 +83,18 @@ def plot_all(my_ax, msh_x, msh_y, msh_z, p_x, p_y, p_z):
         p_z (float): current point z coordinate
     """
     my_ax.plot_wireframe(msh_x, msh_y, msh_z, colors="green")
-    my_ax.plot([0, p_x], [0, p_y], [0, p_z], c="green")
+    my_ax.plot([TOW_X, TOW_X, p_x], [TOW_Y, TOW_Y, p_y], [0, TOW_H, p_z], c="green")
     my_ax.scatter(p_x, p_y, p_z, s=50, c="green")
 
     my_ax.set_xlabel('X axis')
     my_ax.set_ylabel('Y axis')
     my_ax.set_zlabel('Z axis')
-    my_ax.set_aspect('equal')
-    b_b = 105
+    b_b = 1.05*JIB_L
     my_ax.set_xlim3d([-b_b, b_b])
     my_ax.set_ylim3d([-b_b, b_b])
-    my_ax.set_zlim3d([-b_b, b_b])
+    my_ax.set_zlim3d([0., b_b])
+    my_ax.set_aspect('equal')
+    set_axes_equal(my_ax)
 
 
 def get_interval(lst, val):
@@ -82,11 +119,11 @@ def main():
     """Does a 3D visualization of a point moving in spherical coordinates
     """
     phi_l = np.linspace(0., 360., N_SECT_2D+1) - 360./(2*N_SECT_2D)
-    theta_l = np.linspace(0., 180., N_SECT_3D+1)
-    print(phi_l)
-    print(theta_l)
+    theta_l = np.linspace(0., 90., N_SECT_3D+1)
+    # print(phi_l)
+    # print(theta_l)
 
-    r_s = 100
+    r_s = JIB_L
     phi_init = 60
     theta_init = 33.75
 
@@ -98,7 +135,7 @@ def main():
                   valinit=phi_init, valstep=1, color="blue")
 
     axtheta = plt.axes([0.1, 0.1, 0.2, 0.01])
-    stheta = Slider(axtheta, 'Polar angle (theta)', 0, 180,
+    stheta = Slider(axtheta, 'Polar angle (theta)', 0, 90,
                     valinit=theta_init, valstep=1, color="blue")
 
     p_a, p_b, p_i = get_interval(phi_l, phi_init)
@@ -112,6 +149,15 @@ def main():
     msh_phi, msh_theta = np.meshgrid(phi, theta)
     msh_x, msh_y, msh_z = sph2car(r_s, msh_phi, msh_theta)
     p_x, p_y, p_z = sph2car(r_s, phi_init, theta_init)
+    
+    msh_x += TOW_X
+    msh_y += TOW_Y
+    msh_z += TOW_H
+
+    p_x += TOW_X
+    p_y += TOW_Y
+    p_z += TOW_H
+    
     plot_all(my_ax, msh_x, msh_y, msh_z, p_x, p_y, p_z)
 
     def update(val):
@@ -141,13 +187,26 @@ def main():
                         old_phi, old_theta)
                     msh_x, msh_y, msh_z = sph2car(
                         r_s, old_msh_phi, old_msh_theta)
-                    my_ax.plot_wireframe(
-                        msh_x, msh_y, msh_z, colors="blue", alpha=0.1)
+                    
+                    msh_x += TOW_X
+                    msh_y += TOW_Y
+                    msh_z += TOW_H
+
+                    my_ax.plot_surface(
+                        msh_x, msh_y, msh_z, color="blue", alpha=0.1)
 
         msh_phi, msh_theta = np.meshgrid(phi, theta)
         msh_x, msh_y, msh_z = sph2car(r_s, msh_phi, msh_theta)
-
         p_x, p_y, p_z = sph2car(r_s, new_phi, new_theta)
+
+        msh_x += TOW_X
+        msh_y += TOW_Y
+        msh_z += TOW_H
+
+        p_x += TOW_X
+        p_y += TOW_Y
+        p_z += TOW_H
+
         plot_all(my_ax, msh_x, msh_y, msh_z, p_x, p_y, p_z)
 
         fig.canvas.draw_idle()
@@ -159,6 +218,7 @@ def main():
     sphi.on_changed(update)
 
     my_ax.view_init(45, 0)
+    set_axes_equal(my_ax)
 
     mng = plt.get_current_fig_manager()
     mng.resize(*mng.window.maxsize())
