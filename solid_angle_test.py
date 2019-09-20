@@ -8,8 +8,9 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
 from mpl_toolkits.mplot3d import axes3d
 
-TOW_X = 0
-TOW_Y = 0
+TOW_X = 0.
+TOW_Y = 0.
+TOW_Z = 0.
 TOW_H = 43.6  # 60
 JIB_L = 61.07  # 68
 
@@ -73,7 +74,8 @@ def plot_all(my_ax, msh_x, msh_y, msh_z, p_x, p_y, p_z):
     """
     my_ax.plot_wireframe(msh_x, msh_y, msh_z, colors="green")
     my_ax.plot(
-        [TOW_X, TOW_X, p_x], [TOW_Y, TOW_Y, p_y], [0, TOW_H, p_z], c="green")
+        [TOW_X, TOW_X, p_x], [TOW_Y, TOW_Y, p_y], [TOW_Z, TOW_Z+TOW_H, p_z],
+        c="green")
     my_ax.scatter(p_x, p_y, p_z, s=50, c="green")
 
     my_ax.set_xlabel('X axis')
@@ -82,7 +84,7 @@ def plot_all(my_ax, msh_x, msh_y, msh_z, p_x, p_y, p_z):
     b_b = 1.05*JIB_L
     my_ax.set_xlim3d([TOW_X-b_b, TOW_X+b_b])
     my_ax.set_ylim3d([TOW_Y-b_b, TOW_Y+b_b])
-    my_ax.set_zlim3d([0., TOW_H+b_b])
+    my_ax.set_zlim3d([TOW_Z, TOW_Z+TOW_H+b_b])
     my_ax.set_aspect('equal')
     set_axes_equal(my_ax)
 
@@ -153,11 +155,11 @@ def main():
 
     msh_x += TOW_X
     msh_y += TOW_Y
-    msh_z += TOW_H
+    msh_z += TOW_Z + TOW_H
 
     p_x += TOW_X
     p_y += TOW_Y
-    p_z += TOW_H
+    p_z += TOW_Z + TOW_H
 
     plot_all(my_ax, msh_x, msh_y, msh_z, p_x, p_y, p_z)
 
@@ -191,7 +193,7 @@ def main():
 
                     msh_x += TOW_X
                     msh_y += TOW_Y
-                    msh_z += TOW_H
+                    msh_z += TOW_Z + TOW_H
 
                     my_ax.plot_surface(
                         msh_x, msh_y, msh_z, color="blue", alpha=0.1)
@@ -202,11 +204,11 @@ def main():
 
         msh_x += TOW_X
         msh_y += TOW_Y
-        msh_z += TOW_H
+        msh_z += TOW_Z + TOW_H
 
         p_x += TOW_X
         p_y += TOW_Y
-        p_z += TOW_H
+        p_z += TOW_Z + TOW_H
 
         plot_all(my_ax, msh_x, msh_y, msh_z, p_x, p_y, p_z)
 
