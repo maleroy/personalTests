@@ -54,7 +54,7 @@ def get_interval(lst, val):
     """
     for i in range(len(lst)-1):
         if lst[i] <= val <= lst[i+1]:
-            print("{} is between {} and {}".format(val, lst[i], lst[i+1]))
+            # print("{} is between {} and {}".format(val, lst[i], lst[i+1]))
             return lst[i], lst[i+1], i
     print("Error")
     sys.exit()
@@ -237,6 +237,10 @@ def main():
         elif event.key == 'down':
             n_v = stheta.valmax if stheta.val+5>stheta.valmax else stheta.val+5
             stheta.set_val(n_v)
+        elif event.key == 'c':
+            global SECT_PASSED 
+            SECT_PASSED = np.zeros((N_SECT_2D, N_SECT_3D), dtype=bool)
+            update(None)
         else:
             pass
 
