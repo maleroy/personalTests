@@ -8,21 +8,150 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
 from mpl_toolkits.mplot3d import axes3d
 
-TOW_X = 0.
-TOW_Y = 0.
-TOW_Z = 0.
-TOW_H = 43.6  # 60
-JIB_L = 61.07  # 68
 
-N_SECT_2D = 9
-I_SECT_2D = 360./N_SECT_2D
-N_SECT_3D = 4
-I_SECT_3D = 90./N_SECT_3D
+class Crane(object):
+    """Crane class which contains all parameters
 
-N_WIREFRAME = 3
+    Args:
+        object (Crane): Physical dimensions and visualization parameters
+    """
+    def __init__(self):
+        self.tow_x = 0.
+        self.tow_y = 0.
+        self.tow_z = 0.
+        self.tow_h = 43.6  # 60
+        self.jib_l = 61.07  # 68
 
-N_SECT_TOT = N_SECT_2D*N_SECT_3D
-SECT_PASSED = np.zeros((N_SECT_2D, N_SECT_3D), dtype=bool)
+        self.n_sect_2d = 9
+        self.i_sect_2d = 360./self.n_sect_2d
+        self.n_sect_3d = 4
+        self.i_sect_3d = 90./self.n_sect_3d
+
+        self.n_wireframe = 3
+
+        self.n_sect_tot = self.n_sect_2d*self.n_sect_3d
+        self.sect_passed = np.zeros(
+            (self.n_sect_2d, self.n_sect_3d), dtype=bool)
+
+    def clear_sect_passed(self):
+        """Clears history of which sectors have already been passed through
+        """
+        self.sect_passed = np.zeros(
+            (self.n_sect_2d, self.n_sect_3d), dtype=bool)
+
+
+def main():
+    """Does a 3D visualization of a point moving in spherical coordinates
+    """
+    myc = Crane()
+
+    phi_l = np.linspace(0., 360., myc.n_sect_2d+1) - 360./(2*myc.n_sect_2d)
+    theta_l = np.linspace(0., 90., myc.n_sect_3d+1)
+
+    r_s = myc.jib_l
+    phi_init = 60
+    theta_init = 33.75
+
+    fig = plt.figure(figsize=(6, 6))
+    my_ax = fig.add_subplot(111, projection='3d')
+
+    axphi = plt.axes([0.1, 0.15, 0.2, 0.01])
+    sphi = Slider(axphi, 'Azimuthal angle (phi)', phi_l[0], phi_l[-1],
+                  valinit=phi_init, valstep=1, color="blue")
+
+    axtheta = plt.axes([0.1, 0.1, 0.2, 0.01])
+    sthet = Slider(axtheta, 'Polar angle (theta)', theta_l[0], theta_l[-1],
+                   valinit=theta_init, valstep=1, color="blue")
+
+    p_a, p_b, p_i = get_interval(phi_l, phi_init)
+    phi = np.linspace(p_a, p_b, myc.n_wireframe+1)
+
+    t_a, t_b, t_i = get_interval(theta_l, theta_init)
+    theta = np.linspace(t_a, t_b, myc.n_wireframe+1)
+
+    myc.sect_passed[p_i, t_i] = True
+
+    msh_phi, msh_theta = np.meshgrid(phi, theta)
+    msh_x, msh_y, msh_z = sph2car(r_s, msh_phi, msh_theta)
+    p_x, p_y, p_z = sph2car(r_s, phi_init, theta_init)
+
+    msh_x += myc.tow_x
+    msh_y += myc.tow_y
+    msh_z += myc.tow_z + myc.tow_h
+
+    p_x += myc.tow_x
+    p_y += myc.tow_y
+    p_z += myc.tow_z + myc.tow_h
+
+    plot_all(my_ax, myc, msh_x, msh_y, msh_z, p_x, p_y, p_z)
+
+    def update(val):
+        my_ax.clear()
+
+        new_phi = sphi.val
+        p_l, p_r, p_i = get_interval(phi_l, new_phi)
+        phi = np.linspace(p_l, p_r, myc.n_wireframe+1)
+
+        new_theta = sthet.val
+        t_l, t_r, t_i = get_interval(theta_l, new_theta)
+        theta = np.linspace(t_l, t_r, myc.n_wireframe+1)
+
+        myc.sect_passed[p_i, t_i] = True
+        plot_sect_hist(my_ax, myc)
+
+        msh_phi, msh_theta = np.meshgrid(phi, theta)
+        msh_x, msh_y, msh_z = sph2car(r_s, msh_phi, msh_theta)
+        p_x, p_y, p_z = sph2car(r_s, new_phi, new_theta)
+
+        msh_x += myc.tow_x
+        msh_y += myc.tow_y
+        msh_z += myc.tow_z + myc.tow_h
+
+        p_x += myc.tow_x
+        p_y += myc.tow_y
+        p_z += myc.tow_z + myc.tow_h
+
+        plot_all(my_ax, myc, msh_x, msh_y, msh_z, p_x, p_y, p_z)
+
+        fig.canvas.draw_idle()
+
+    # Initial update now that everything is set up
+    update(None)
+
+    sthet.on_changed(update)
+    sphi.on_changed(update)
+
+    my_ax.view_init(45, 0)
+    set_axes_equal(my_ax)
+
+    def press(event):
+        if event.key == 'right':
+            n_v = (
+                sphi.valmax if sphi.val+5 > sphi.valmax else sphi.val+5)
+            sphi.set_val(n_v)
+        elif event.key == 'left':
+            n_v = (
+                sphi.valmin if sphi.val-5 < sphi.valmin else sphi.val-5)
+            sphi.set_val(n_v)
+        elif event.key == 'up':
+            n_v = (
+                sthet.valmin if sthet.val-5 < sthet.valmin else sthet.val-5)
+            sthet.set_val(n_v)
+        elif event.key == 'down':
+            n_v = (
+                sthet.valmax if sthet.val+5 > sthet.valmax else sthet.val+5)
+            sthet.set_val(n_v)
+        elif event.key == 'c':
+            myc.clear_sect_passed()
+            update(None)
+        else:
+            pass
+
+    fig.canvas.mpl_connect('key_press_event', press)
+
+    mng = plt.get_current_fig_manager()
+    mng.resize(*mng.window.maxsize())
+    plt.show()
 
 
 def sph2car(r_s, phi, theta):
@@ -60,7 +189,7 @@ def get_interval(lst, val):
     sys.exit()
 
 
-def plot_all(my_ax, msh_x, msh_y, msh_z, p_x, p_y, p_z):
+def plot_all(my_ax, myc, msh_x, msh_y, msh_z, p_x, p_y, p_z):
     """Plots a 3D surface as well as the line from center to current point
 
     Args:
@@ -74,17 +203,17 @@ def plot_all(my_ax, msh_x, msh_y, msh_z, p_x, p_y, p_z):
     """
     my_ax.plot_wireframe(msh_x, msh_y, msh_z, colors="green")
     my_ax.plot(
-        [TOW_X, TOW_X, p_x], [TOW_Y, TOW_Y, p_y], [TOW_Z, TOW_Z+TOW_H, p_z],
-        c="green")
+        [myc.tow_x, myc.tow_x, p_x], [myc.tow_y, myc.tow_y, p_y],
+        [myc.tow_z, myc.tow_z+myc.tow_h, p_z], c="green")
     my_ax.scatter(p_x, p_y, p_z, s=50, c="green")
 
     my_ax.set_xlabel('X axis')
     my_ax.set_ylabel('Y axis')
     my_ax.set_zlabel('Z axis')
-    b_b = 1.05*JIB_L
-    my_ax.set_xlim3d([TOW_X-b_b, TOW_X+b_b])
-    my_ax.set_ylim3d([TOW_Y-b_b, TOW_Y+b_b])
-    my_ax.set_zlim3d([TOW_Z, TOW_Z+TOW_H+b_b])
+    b_b = 1.05*myc.jib_l
+    my_ax.set_xlim3d([myc.tow_x-b_b, myc.tow_x+b_b])
+    my_ax.set_ylim3d([myc.tow_y-b_b, myc.tow_y+b_b])
+    my_ax.set_zlim3d([myc.tow_z, myc.tow_z+myc.tow_h+b_b])
     my_ax.set_aspect('equal')
     set_axes_equal(my_ax)
 
@@ -97,7 +226,6 @@ def set_axes_equal(my_ax):
     Input
       my_ax: a matplotlib axis, e.g., as output from plt.gca().
     '''
-
     x_limits = my_ax.get_xlim3d()
     y_limits = my_ax.get_ylim3d()
     z_limits = my_ax.get_zlim3d()
@@ -118,137 +246,34 @@ def set_axes_equal(my_ax):
     my_ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
 
 
-def main():
-    """Does a 3D visualization of a point moving in spherical coordinates
+def plot_sect_hist(my_ax, myc):
+    """Plots all sectors that have already been passed
+
+    Args:
+        my_ax (plt figure subplot): Where sectors should be plotted
     """
-    phi_l = np.linspace(0., 360., N_SECT_2D+1) - 360./(2*N_SECT_2D)
-    theta_l = np.linspace(0., 90., N_SECT_3D+1)
-    # print(phi_l)
-    # print(theta_l)
+    for i in range(myc.sect_passed.shape[0]):
+        for j in range(myc.sect_passed.shape[1]):
+            if myc.sect_passed[i, j]:
+                old_phi = np.linspace(
+                    i*myc.i_sect_2d - 360./(2*myc.n_sect_2d),
+                    (i+1)*myc.i_sect_2d - 360./(2*myc.n_sect_2d),
+                    myc.n_wireframe+1)
+                old_theta = np.linspace(
+                    j*myc.i_sect_3d,
+                    (j+1)*myc.i_sect_3d,
+                    myc.n_wireframe+1)
+                old_msh_phi, old_msh_theta = np.meshgrid(
+                    old_phi, old_theta)
+                msh_x, msh_y, msh_z = sph2car(
+                    myc.jib_l, old_msh_phi, old_msh_theta)
 
-    r_s = JIB_L
-    phi_init = 60
-    theta_init = 33.75
+                msh_x += myc.tow_x
+                msh_y += myc.tow_y
+                msh_z += myc.tow_z + myc.tow_h
 
-    fig = plt.figure(figsize=(6, 6))
-    my_ax = fig.add_subplot(111, projection='3d')
-
-    axphi = plt.axes([0.1, 0.15, 0.2, 0.01])
-    sphi = Slider(axphi, 'Azimuthal angle (phi)', phi_l[0], phi_l[-1],
-                  valinit=phi_init, valstep=1, color="blue")
-
-    axtheta = plt.axes([0.1, 0.1, 0.2, 0.01])
-    stheta = Slider(axtheta, 'Polar angle (theta)', theta_l[0], theta_l[-1],
-                    valinit=theta_init, valstep=1, color="blue")
-
-    p_a, p_b, p_i = get_interval(phi_l, phi_init)
-    phi = np.linspace(p_a, p_b, N_WIREFRAME+1)
-
-    t_a, t_b, t_i = get_interval(theta_l, theta_init)
-    theta = np.linspace(t_a, t_b, N_WIREFRAME+1)
-
-    SECT_PASSED[p_i, t_i] = True
-
-    msh_phi, msh_theta = np.meshgrid(phi, theta)
-    msh_x, msh_y, msh_z = sph2car(r_s, msh_phi, msh_theta)
-    p_x, p_y, p_z = sph2car(r_s, phi_init, theta_init)
-
-    msh_x += TOW_X
-    msh_y += TOW_Y
-    msh_z += TOW_Z + TOW_H
-
-    p_x += TOW_X
-    p_y += TOW_Y
-    p_z += TOW_Z + TOW_H
-
-    plot_all(my_ax, msh_x, msh_y, msh_z, p_x, p_y, p_z)
-
-    def update(val):
-        my_ax.clear()
-
-        new_phi = sphi.val
-        p_l, p_r, p_i = get_interval(phi_l, new_phi)
-        phi = np.linspace(p_l, p_r, N_WIREFRAME+1)
-
-        new_theta = stheta.val
-        t_l, t_r, t_i = get_interval(theta_l, new_theta)
-        theta = np.linspace(t_l, t_r, N_WIREFRAME+1)
-
-        SECT_PASSED[p_i, t_i] = True
-        for i in range(SECT_PASSED.shape[0]):
-            for j in range(SECT_PASSED.shape[1]):
-                if SECT_PASSED[i, j]:
-                    old_phi = np.linspace(
-                        i*I_SECT_2D - 360./(2*N_SECT_2D),
-                        (i+1)*I_SECT_2D - 360./(2*N_SECT_2D),
-                        N_WIREFRAME+1)
-                    old_theta = np.linspace(
-                        j*I_SECT_3D,
-                        (j+1)*I_SECT_3D,
-                        N_WIREFRAME+1)
-                    old_msh_phi, old_msh_theta = np.meshgrid(
-                        old_phi, old_theta)
-                    msh_x, msh_y, msh_z = sph2car(
-                        r_s, old_msh_phi, old_msh_theta)
-
-                    msh_x += TOW_X
-                    msh_y += TOW_Y
-                    msh_z += TOW_Z + TOW_H
-
-                    my_ax.plot_surface(
-                        msh_x, msh_y, msh_z, color="blue", alpha=0.1)
-
-        msh_phi, msh_theta = np.meshgrid(phi, theta)
-        msh_x, msh_y, msh_z = sph2car(r_s, msh_phi, msh_theta)
-        p_x, p_y, p_z = sph2car(r_s, new_phi, new_theta)
-
-        msh_x += TOW_X
-        msh_y += TOW_Y
-        msh_z += TOW_Z + TOW_H
-
-        p_x += TOW_X
-        p_y += TOW_Y
-        p_z += TOW_Z + TOW_H
-
-        plot_all(my_ax, msh_x, msh_y, msh_z, p_x, p_y, p_z)
-
-        fig.canvas.draw_idle()
-
-    # Initial update now that everything is set up
-    update(None)
-
-    stheta.on_changed(update)
-    sphi.on_changed(update)
-
-    my_ax.view_init(45, 0)
-    set_axes_equal(my_ax)
-    
-    def press(event):
-        # print("event now", event.key)
-        if event.key == 'right':
-            n_v = sphi.valmax if sphi.val+5>sphi.valmax else sphi.val+5
-            sphi.set_val(n_v)
-        elif event.key == 'left':
-            n_v = sphi.valmin if sphi.val-5<sphi.valmin else sphi.val-5
-            sphi.set_val(n_v)
-        elif event.key == 'up':
-            n_v = stheta.valmin if stheta.val-5<stheta.valmin else stheta.val-5
-            stheta.set_val(n_v)
-        elif event.key == 'down':
-            n_v = stheta.valmax if stheta.val+5>stheta.valmax else stheta.val+5
-            stheta.set_val(n_v)
-        elif event.key == 'c':
-            global SECT_PASSED 
-            SECT_PASSED = np.zeros((N_SECT_2D, N_SECT_3D), dtype=bool)
-            update(None)
-        else:
-            pass
-
-    fig.canvas.mpl_connect('key_press_event', press)
-
-    mng = plt.get_current_fig_manager()
-    mng.resize(*mng.window.maxsize())
-    plt.show()
+                my_ax.plot_surface(
+                    msh_x, msh_y, msh_z, color="blue", alpha=0.1)
 
 
 if __name__ == '__main__':
