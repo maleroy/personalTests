@@ -80,9 +80,9 @@ def plot_all(my_ax, msh_x, msh_y, msh_z, p_x, p_y, p_z):
     my_ax.set_ylabel('Y axis')
     my_ax.set_zlabel('Z axis')
     b_b = 1.05*JIB_L
-    my_ax.set_xlim3d([-b_b, b_b])
-    my_ax.set_ylim3d([-b_b, b_b])
-    my_ax.set_zlim3d([0., b_b])
+    my_ax.set_xlim3d([TOW_X-b_b, TOW_X+b_b])
+    my_ax.set_ylim3d([TOW_Y-b_b, TOW_Y+b_b])
+    my_ax.set_zlim3d([0., TOW_H+b_b])
     my_ax.set_aspect('equal')
     set_axes_equal(my_ax)
 
