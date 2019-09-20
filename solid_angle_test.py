@@ -13,7 +13,7 @@ TOW_Y = 0
 TOW_H = 43.6  # 60
 JIB_L = 61.07  # 68
 
-N_SECT_2D = 12
+N_SECT_2D = 9
 I_SECT_2D = 360./N_SECT_2D
 N_SECT_3D = 4
 I_SECT_3D = 90./N_SECT_3D
@@ -22,35 +22,6 @@ N_WIREFRAME = 3
 
 N_SECT_TOT = N_SECT_2D*N_SECT_3D
 SECT_PASSED = np.zeros((N_SECT_2D, N_SECT_3D), dtype=bool)
-
-
-def set_axes_equal(ax):
-    '''Make axes of 3D plot have equal scale so that spheres appear as spheres,
-    cubes as cubes, etc..  This is one possible solution to Matplotlib's
-    ax.set_aspect('equal') and ax.axis('equal') not working for 3D.
-
-    Input
-      ax: a matplotlib axis, e.g., as output from plt.gca().
-    '''
-
-    x_limits = ax.get_xlim3d()
-    y_limits = ax.get_ylim3d()
-    z_limits = ax.get_zlim3d()
-
-    x_range = abs(x_limits[1] - x_limits[0])
-    x_middle = np.mean(x_limits)
-    y_range = abs(y_limits[1] - y_limits[0])
-    y_middle = np.mean(y_limits)
-    z_range = abs(z_limits[1] - z_limits[0])
-    z_middle = np.mean(z_limits)
-
-    # The plot bounding box is a sphere in the sense of the infinity
-    # norm, hence I call half the max range the plot radius.
-    plot_radius = 0.5*max([x_range, y_range, z_range])
-
-    ax.set_xlim3d([x_middle - plot_radius, x_middle + plot_radius])
-    ax.set_ylim3d([y_middle - plot_radius, y_middle + plot_radius])
-    ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
 
 
 def sph2car(r_s, phi, theta):
@@ -70,6 +41,24 @@ def sph2car(r_s, phi, theta):
     return x_c, y_c, z_c
 
 
+def get_interval(lst, val):
+    """Determines the interval a value is in
+
+    Args:
+        lst (np.array): list of intervals
+        val (float): value whose interval must be found
+
+    Returns:
+        2 floats and 1 int: the interval boundaries and the left index
+    """
+    for i in range(len(lst)-1):
+        if lst[i] <= val <= lst[i+1]:
+            print("{} is between {} and {}".format(val, lst[i], lst[i+1]))
+            return lst[i], lst[i+1], i
+    print("Error")
+    sys.exit()
+
+
 def plot_all(my_ax, msh_x, msh_y, msh_z, p_x, p_y, p_z):
     """Plots a 3D surface as well as the line from center to current point
 
@@ -83,7 +72,8 @@ def plot_all(my_ax, msh_x, msh_y, msh_z, p_x, p_y, p_z):
         p_z (float): current point z coordinate
     """
     my_ax.plot_wireframe(msh_x, msh_y, msh_z, colors="green")
-    my_ax.plot([TOW_X, TOW_X, p_x], [TOW_Y, TOW_Y, p_y], [0, TOW_H, p_z], c="green")
+    my_ax.plot(
+        [TOW_X, TOW_X, p_x], [TOW_Y, TOW_Y, p_y], [0, TOW_H, p_z], c="green")
     my_ax.scatter(p_x, p_y, p_z, s=50, c="green")
 
     my_ax.set_xlabel('X axis')
@@ -97,22 +87,33 @@ def plot_all(my_ax, msh_x, msh_y, msh_z, p_x, p_y, p_z):
     set_axes_equal(my_ax)
 
 
-def get_interval(lst, val):
-    """Determines the interval a value is in
+def set_axes_equal(my_ax):
+    '''Make axes of 3D plot have equal scale so that spheres appear as spheres,
+    cubes as cubes, etc..  This is one possible solution to Matplotlib's
+    my_ax.set_aspect('equal') and my_ax.axis('equal') not working for 3D.
 
-    Args:
-        lst (np.array): list of intervals
-        val (float): value whose interval must be found
+    Input
+      my_ax: a matplotlib axis, e.g., as output from plt.gca().
+    '''
 
-    Returns:
-        2 floats and 1 int: the interval boundaries and the left index
-    """
-    for i in range(len(lst)-1):
-        if lst[i] <= val <= lst[i+1]:
-            # print("{} is between {} and {}".format(val, lst[i], lst[i+1]))
-            return lst[i], lst[i+1], i
-    print("Error")
-    sys.exit()
+    x_limits = my_ax.get_xlim3d()
+    y_limits = my_ax.get_ylim3d()
+    z_limits = my_ax.get_zlim3d()
+
+    x_range = abs(x_limits[1] - x_limits[0])
+    x_middle = np.mean(x_limits)
+    y_range = abs(y_limits[1] - y_limits[0])
+    y_middle = np.mean(y_limits)
+    z_range = abs(z_limits[1] - z_limits[0])
+    z_middle = np.mean(z_limits)
+
+    # The plot bounding box is a sphere in the sense of the infinity
+    # norm, hence I call half the max range the plot radius.
+    plot_radius = 0.5*max([x_range, y_range, z_range])
+
+    my_ax.set_xlim3d([x_middle - plot_radius, x_middle + plot_radius])
+    my_ax.set_ylim3d([y_middle - plot_radius, y_middle + plot_radius])
+    my_ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
 
 
 def main():
@@ -131,11 +132,11 @@ def main():
     my_ax = fig.add_subplot(111, projection='3d')
 
     axphi = plt.axes([0.1, 0.15, 0.2, 0.01])
-    sphi = Slider(axphi, 'Azimuthal angle (phi)', -15, 345,
+    sphi = Slider(axphi, 'Azimuthal angle (phi)', phi_l[0], phi_l[-1],
                   valinit=phi_init, valstep=1, color="blue")
 
     axtheta = plt.axes([0.1, 0.1, 0.2, 0.01])
-    stheta = Slider(axtheta, 'Polar angle (theta)', 0, 90,
+    stheta = Slider(axtheta, 'Polar angle (theta)', theta_l[0], theta_l[-1],
                     valinit=theta_init, valstep=1, color="blue")
 
     p_a, p_b, p_i = get_interval(phi_l, phi_init)
@@ -149,7 +150,7 @@ def main():
     msh_phi, msh_theta = np.meshgrid(phi, theta)
     msh_x, msh_y, msh_z = sph2car(r_s, msh_phi, msh_theta)
     p_x, p_y, p_z = sph2car(r_s, phi_init, theta_init)
-    
+
     msh_x += TOW_X
     msh_y += TOW_Y
     msh_z += TOW_H
@@ -157,7 +158,7 @@ def main():
     p_x += TOW_X
     p_y += TOW_Y
     p_z += TOW_H
-    
+
     plot_all(my_ax, msh_x, msh_y, msh_z, p_x, p_y, p_z)
 
     def update(val):
@@ -187,7 +188,7 @@ def main():
                         old_phi, old_theta)
                     msh_x, msh_y, msh_z = sph2car(
                         r_s, old_msh_phi, old_msh_theta)
-                    
+
                     msh_x += TOW_X
                     msh_y += TOW_Y
                     msh_z += TOW_H
