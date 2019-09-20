@@ -222,6 +222,25 @@ def main():
 
     my_ax.view_init(45, 0)
     set_axes_equal(my_ax)
+    
+    def press(event):
+        # print("event now", event.key)
+        if event.key == 'right':
+            n_v = sphi.valmax if sphi.val+5>sphi.valmax else sphi.val+5
+            sphi.set_val(n_v)
+        elif event.key == 'left':
+            n_v = sphi.valmin if sphi.val-5<sphi.valmin else sphi.val-5
+            sphi.set_val(n_v)
+        elif event.key == 'up':
+            n_v = stheta.valmin if stheta.val-5<stheta.valmin else stheta.val-5
+            stheta.set_val(n_v)
+        elif event.key == 'down':
+            n_v = stheta.valmax if stheta.val+5>stheta.valmax else stheta.val+5
+            stheta.set_val(n_v)
+        else:
+            pass
+
+    fig.canvas.mpl_connect('key_press_event', press)
 
     mng = plt.get_current_fig_manager()
     mng.resize(*mng.window.maxsize())
