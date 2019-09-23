@@ -11,6 +11,8 @@ from mpl_toolkits.mplot3d import axes3d
 PLOT_CORNERS_RADIAL = False
 PLOT_CORNERS_EDGE = False
 
+np.set_printoptions(sign='+', precision=2, suppress=True)
+
 
 class Crane(object):
     """Crane class which contains all parameters
@@ -25,6 +27,9 @@ class Crane(object):
 
         self.tow_h = 43.6  # 60
         self.jib_l = 61.07  # 68
+
+        self.hfov_h = 0.5*45.4
+        self.hfov_v = 0.5*64.2
 
         self.n_sect_2d = 9
         self.i_sect_2d = 360./self.n_sect_2d
@@ -41,6 +46,9 @@ class Crane(object):
         self.prev_2d_sect = -1
 
         self.plot_cur_footprint = True
+
+        self.fix_ang = 30
+        self.fix_ang_rad = np.radians(self.fix_ang)
 
     def clear_sect_passed(self):
         """Clears history of which sectors have already been passed through
@@ -166,6 +174,15 @@ def main():
         elif event.key == 'h':
             myc.plot_cur_footprint = not myc.plot_cur_footprint
             update(None)
+        elif event.key == 't':
+            my_ax.view_init(90, 0)
+            update(None)
+        elif event.key == 'f':
+            my_ax.view_init(0, 0)
+            update(None)
+        elif event.key == 'o':
+            my_ax.view_init(45, 0)
+            update(None)
         else:
             pass
 
@@ -228,20 +245,21 @@ def plot_all(my_ax, myc, msh_x, msh_y, msh_z, p_x, p_y, p_z, cur_phi):
     my_ax.plot(
         [myc.tow_x, myc.tow_x, p_x], [myc.tow_y, myc.tow_y, p_y],
         [myc.tow_z, myc.tow_z+myc.tow_h, p_z], c="green")
-    my_ax.scatter([p_x, p_x], [p_y, p_y], [0, p_z], s=50, c="green")
+    my_ax.scatter([p_x, p_x], [p_y, p_y], [p_z, 0], s=50, c="green")
 
     if myc.plot_cur_footprint:
-        plot_footprint(my_ax, p_x, p_y, p_z, cur_phi, "green", 0.75)
-    plot_footprint_hist(my_ax, myc)
+        plot_footprint(my_ax, myc, p_x, p_y, p_z, cur_phi, "green", 0.75)
+    #plot_footprint_hist(my_ax, myc)
 
     set_axes_equal(my_ax, myc)
 
 
-def plot_footprint(my_ax, p_x, p_y, p_z, cur_phi, colr="black", alp=0.1):
+def plot_footprint(my_ax, myc, p_x, p_y, p_z, cur_phi, colr="black", alp=0.1):
     """Plots a single camera footprint on the ground
 
     Args:
         my_ax (plt figure 3D subplot): where results are plotted
+        myc (Crane): instance containing all physical parameters and history
         p_x (float): current point x coordinate
         p_y (float): current point y coordinate
         p_z (float): current point z coordinate
@@ -250,26 +268,26 @@ def plot_footprint(my_ax, p_x, p_y, p_z, cur_phi, colr="black", alp=0.1):
         alp (float, optional): alpha value of surface. Defaults to 0.1.
     """
     delta_h = p_z - 0
-    delta_r = delta_h*np.tan(np.radians(0.5*45.4))
-    delta_t = delta_h*np.tan(np.radians(0.5*64.2))
+    delta_r = delta_h*np.tan(np.radians(myc.hfov_h))
+    delta_t = delta_h*np.tan(np.radians(myc.hfov_v))
     delta_m = np.sqrt(delta_r**2+delta_t**2)
-    hfov_d = np.degrees(np.arctan2(delta_m, delta_h))
-
-    p_r = np.sqrt(p_x**2+p_y**2)
-
-    cur_phi_rad = np.radians(cur_phi)
-
-    delta_tx = delta_t*np.sin(cur_phi_rad)
-    delta_ty = delta_t*np.cos(cur_phi_rad)
+    hfov_d = np.degrees(np.arctan2(delta_h, delta_m))  # why not dm, dh??
 
     if PLOT_CORNERS_RADIAL:
-        pxs = [(p_r-delta_r)*np.cos(cur_phi_rad),
-               (p_r+delta_r)*np.cos(cur_phi_rad),
+        cur_phi_rad = np.radians(cur_phi)
+
+        delta_rx = delta_r*np.cos(cur_phi_rad)
+        delta_ry = delta_r*np.sin(cur_phi_rad)
+        delta_tx = delta_t*np.sin(cur_phi_rad)
+        delta_ty = delta_t*np.cos(cur_phi_rad)
+
+        pxs = [p_x-delta_rx,
+               p_x+delta_rx,
                p_x-delta_tx,
                p_x+delta_tx]
 
-        pys = [(p_r-delta_r)*np.sin(cur_phi_rad),
-               (p_r+delta_r)*np.sin(cur_phi_rad),
+        pys = [p_y-delta_ry,
+               p_y+delta_ry,
                p_y+delta_ty,
                p_y-delta_ty]
 
@@ -280,16 +298,32 @@ def plot_footprint(my_ax, p_x, p_y, p_z, cur_phi, colr="black", alp=0.1):
     diag_phi_left = np.radians(cur_phi-hfov_d)
     diag_phi_right = np.radians(cur_phi+hfov_d)
 
-    pxs = [p_x-delta_m*np.sin(diag_phi_left),
-           p_x-delta_m*np.sin(diag_phi_right),
-           p_x+delta_m*np.sin(diag_phi_left),
-           p_x+delta_m*np.sin(diag_phi_right)]
+    if myc.hfov_h+myc.fix_ang < 90.0:
+        delta_r_in = delta_h*np.tan(np.radians(myc.hfov_h-myc.fix_ang))
+        delta_r_out = delta_h*np.tan(np.radians(myc.hfov_h+myc.fix_ang))
 
-    pys = [p_y+delta_m*np.cos(diag_phi_left),
-           p_y+delta_m*np.cos(diag_phi_right),
-           p_y-delta_m*np.cos(diag_phi_left),
-           p_y-delta_m*np.cos(diag_phi_right)]
+        print(np.array([delta_r, delta_r_in, delta_r_out, np.sqrt(p_x**2+p_y**2), p_z, delta_m, hfov_d]))
 
+    pxs = [p_x + delta_m*np.cos(diag_phi_right),
+           p_x - delta_m*np.cos(diag_phi_left),
+           p_x - delta_m*np.cos(diag_phi_right),
+           p_x + delta_m*np.cos(diag_phi_left)]
+
+    pys = [p_y + delta_m*np.sin(diag_phi_right),
+           p_y - delta_m*np.sin(diag_phi_left),
+           p_y - delta_m*np.sin(diag_phi_right),
+           p_y + delta_m*np.sin(diag_phi_left)]
+    """
+    pxs = [p_x - delta_m*np.sin(diag_phi_left),
+           p_x - delta_m*np.sin(diag_phi_right),
+           p_x + delta_m*np.sin(diag_phi_left),
+           p_x + delta_m*np.sin(diag_phi_right)]
+
+    pys = [p_y + delta_m*np.cos(diag_phi_left),
+           p_y + delta_m*np.cos(diag_phi_right),
+           p_y - delta_m*np.cos(diag_phi_left),
+           p_y - delta_m*np.cos(diag_phi_right)]
+    """
     pzs = [0, 0, 0, 0]
 
     try:
@@ -379,14 +413,15 @@ def plot_footprint_hist(my_ax, myc):
     """
     for i in range(myc.sect_passed_2d.shape[0]):
         if myc.sect_passed_2d[i].any():
-            my_ax.scatter(myc.sect_passed_2d[i, 0]+myc.tow_x,
-                          myc.sect_passed_2d[i, 1]+myc.tow_y,
+            my_ax.scatter(myc.sect_passed_2d[i, 0] + myc.tow_x,
+                          myc.sect_passed_2d[i, 1] + myc.tow_y,
                           0, c="black")
 
             plot_footprint(my_ax,
-                           myc.sect_passed_2d[i, 0]+myc.tow_x,
-                           myc.sect_passed_2d[i, 1]+myc.tow_y,
-                           myc.sect_passed_2d[i, 2]+myc.tow_z+myc.tow_h,
+                           myc,
+                           myc.sect_passed_2d[i, 0] + myc.tow_x,
+                           myc.sect_passed_2d[i, 1] + myc.tow_y,
+                           myc.sect_passed_2d[i, 2] + myc.tow_z + myc.tow_h,
                            myc.sect_passed_2d[i, 3])
 
 
