@@ -54,7 +54,7 @@ def main():
     theta_init = 90  # 33.75
 
     fig = plt.figure(figsize=(6, 6))
-    my_ax = fig.add_subplot(111, projection='3d', proj_type = 'ortho')
+    my_ax = fig.add_subplot(111, projection='3d', proj_type='ortho')
 
     axphi = plt.axes([0.1, 0.15, 0.2, 0.01])
     sphi = Slider(axphi, 'Azimuthal angle (phi)', phi_l[0], phi_l[-1],
@@ -122,8 +122,8 @@ def main():
     sthet.on_changed(update)
     sphi.on_changed(update)
 
-    #my_ax.view_init(45, 0)
-    my_ax.view_init(0, 90)
+    my_ax.view_init(45, 0)
+    #my_ax.view_init(0, 90)
     set_axes_equal(my_ax)
 
     def press(event):
@@ -207,7 +207,7 @@ def plot_all(my_ax, myc, msh_x, msh_y, msh_z, p_x, p_y, p_z, cur_phi):
     my_ax.plot(
         [myc.tow_x, myc.tow_x, p_x], [myc.tow_y, myc.tow_y, p_y],
         [myc.tow_z, myc.tow_z+myc.tow_h, p_z], c="green")
-    my_ax.scatter([p_x, p_x], [p_y, p_y], [0, p_z], s=50, c="green")
+    my_ax.scatter([p_x, p_x], [p_y, p_y], [0, p_z], s=50, c="cyan")
 
     delta_h = p_z - 0
     delta_r = delta_h*np.tan(np.radians(0.5*45.4))
@@ -217,27 +217,33 @@ def plot_all(my_ax, myc, msh_x, msh_y, msh_z, p_x, p_y, p_z, cur_phi):
 
     p_r = np.sqrt(p_x**2+p_y**2)
 
-    pxs = [(p_r - delta_r)*np.cos(np.radians(cur_phi)),
-           (p_r + delta_r)*np.cos(np.radians(cur_phi)),
-           p_x - delta_t*np.sin(np.radians(cur_phi)),
-           p_x + delta_t*np.sin(np.radians(cur_phi))]
-    pys = [(p_r - delta_r)*np.sin(np.radians(cur_phi)),
-           (p_r + delta_r)*np.sin(np.radians(cur_phi)),
-           p_y + delta_t*np.cos(np.radians(cur_phi)),
-           p_y - delta_t*np.cos(np.radians(cur_phi))]
+    pxs = [(p_r-delta_r)*np.cos(np.radians(cur_phi)),
+            (p_r+delta_r)*np.cos(np.radians(cur_phi)),
+            p_r*np.cos(np.radians(cur_phi))-delta_t*np.sin(np.radians(cur_phi)),
+            p_r*np.cos(np.radians(cur_phi))+delta_t*np.sin(np.radians(cur_phi)),
+            ]
+    pys = [(p_r-delta_r)*np.sin(np.radians(cur_phi)),
+            (p_r+delta_r)*np.sin(np.radians(cur_phi)),
+            p_r*np.sin(np.radians(cur_phi))+delta_t*np.cos(np.radians(cur_phi)),
+            p_r*np.sin(np.radians(cur_phi))-delta_t*np.cos(np.radians(cur_phi)),
+            ]
     pzs = [0, 0, 0, 0]
     my_ax.scatter(pxs, pys, pzs, s=50, c="green")
 
-    pxs = [p_r*np.cos(np.radians(cur_phi))-delta_m*np.sin(np.radians(hfov_d+cur_phi)),
-           p_r*np.cos(np.radians(cur_phi))+delta_m*np.sin(np.radians(hfov_d-cur_phi)),
-           p_r*np.cos(np.radians(cur_phi))-delta_m*np.sin(np.radians(hfov_d-cur_phi)),
-           p_r*np.cos(np.radians(cur_phi))+delta_m*np.sin(np.radians(hfov_d+cur_phi))]
-    pys = [p_r*np.sin(np.radians(cur_phi))+delta_m*np.cos(np.radians(hfov_d+cur_phi)),
-           p_r*np.sin(np.radians(cur_phi))+delta_m*np.cos(np.radians(hfov_d-cur_phi)),
-           p_r*np.sin(np.radians(cur_phi))-delta_m*np.cos(np.radians(hfov_d-cur_phi)),
-           p_r*np.sin(np.radians(cur_phi))-delta_m*np.cos(np.radians(hfov_d+cur_phi))]
+    pxs = [p_r*np.cos(np.radians(cur_phi))-delta_m*np.sin(np.radians(cur_phi-hfov_d)),
+            p_r*np.cos(np.radians(cur_phi))-delta_m*np.sin(np.radians(cur_phi+hfov_d)),
+            p_r*np.cos(np.radians(cur_phi))+delta_m*np.sin(np.radians(cur_phi-hfov_d)),
+            p_r*np.cos(np.radians(cur_phi))+delta_m*np.sin(np.radians(cur_phi+hfov_d)),
+            ]
+    pys = [p_r*np.sin(np.radians(cur_phi))+delta_m*np.cos(np.radians(cur_phi-hfov_d)),
+            p_r*np.sin(np.radians(cur_phi))+delta_m*np.cos(np.radians(cur_phi+hfov_d)),
+            p_r*np.sin(np.radians(cur_phi))-delta_m*np.cos(np.radians(cur_phi-hfov_d)),
+            p_r*np.sin(np.radians(cur_phi))-delta_m*np.cos(np.radians(cur_phi+hfov_d)),
+            ]
     pzs = [0, 0, 0, 0]
     my_ax.scatter(pxs, pys, pzs, s=50, c="blue")
+
+    my_ax.plot_trisurf(pxs, pys, pzs, color="red", alpha=0.1)
 
     my_ax.set_xlabel('X axis')
     my_ax.set_ylabel('Y axis')
