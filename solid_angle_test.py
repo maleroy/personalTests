@@ -40,6 +40,8 @@ class Crane(object):
         self.sect_passed_2d = np.zeros((self.n_sect_2d, 4))
         self.prev_2d_sect = -1
 
+        self.plot_cur_footprint = True
+
     def clear_sect_passed(self):
         """Clears history of which sectors have already been passed through
         """
@@ -161,6 +163,9 @@ def main():
         elif event.key == 'c':
             myc.clear_sect_passed()
             update(None)
+        elif event.key == 'h':
+            myc.plot_cur_footprint = not myc.plot_cur_footprint
+            update(None)
         else:
             pass
 
@@ -225,13 +230,25 @@ def plot_all(my_ax, myc, msh_x, msh_y, msh_z, p_x, p_y, p_z, cur_phi):
         [myc.tow_z, myc.tow_z+myc.tow_h, p_z], c="green")
     my_ax.scatter([p_x, p_x], [p_y, p_y], [0, p_z], s=50, c="green")
 
+    if myc.plot_cur_footprint:
+        plot_footprint(my_ax, p_x, p_y, p_z, cur_phi, "green", 0.75)
     plot_footprint_hist(my_ax, myc)
-    plot_footprint(my_ax, p_x, p_y, p_z, cur_phi, "black")
 
     set_axes_equal(my_ax, myc)
 
 
-def plot_footprint(my_ax, p_x, p_y, p_z, cur_phi, colr="green"):
+def plot_footprint(my_ax, p_x, p_y, p_z, cur_phi, colr="black", alp=0.1):
+    """Plots a single camera footprint on the ground
+
+    Args:
+        my_ax (plt figure 3D subplot): where results are plotted
+        p_x (float): current point x coordinate
+        p_y (float): current point y coordinate
+        p_z (float): current point z coordinate
+        cur_phi ([type]): [description]
+        colr (str, optional): color of surface. Defaults to "black".
+        alp (float, optional): alpha value of surface. Defaults to 0.1.
+    """
     delta_h = p_z - 0
     delta_r = delta_h*np.tan(np.radians(0.5*45.4))
     delta_t = delta_h*np.tan(np.radians(0.5*64.2))
@@ -276,7 +293,7 @@ def plot_footprint(my_ax, p_x, p_y, p_z, cur_phi, colr="green"):
     pzs = [0, 0, 0, 0]
 
     try:
-        my_ax.plot_trisurf(pxs, pys, pzs, color=colr, alpha=0.1)
+        my_ax.plot_trisurf(pxs, pys, pzs, color=colr, alpha=alp)
     except ValueError:
         print("No distinct points, skipping")
 
@@ -362,10 +379,14 @@ def plot_footprint_hist(my_ax, myc):
     """
     for i in range(myc.sect_passed_2d.shape[0]):
         if myc.sect_passed_2d[i].any():
+            my_ax.scatter(myc.sect_passed_2d[i, 0]+myc.tow_x,
+                          myc.sect_passed_2d[i, 1]+myc.tow_y,
+                          0, c="black")
+
             plot_footprint(my_ax,
-                           myc.sect_passed_2d[i, 0],
-                           myc.sect_passed_2d[i, 1],
-                           myc.sect_passed_2d[i, 2]+myc.tow_h,
+                           myc.sect_passed_2d[i, 0]+myc.tow_x,
+                           myc.sect_passed_2d[i, 1]+myc.tow_y,
+                           myc.sect_passed_2d[i, 2]+myc.tow_z+myc.tow_h,
                            myc.sect_passed_2d[i, 3])
 
 
