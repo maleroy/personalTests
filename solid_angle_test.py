@@ -8,6 +8,9 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
 from mpl_toolkits.mplot3d import axes3d
 
+PLOT_CORNERS_RADIAL = False
+PLOT_CORNERS_EDGE = False
+
 
 class Crane(object):
     """Crane class which contains all parameters
@@ -34,11 +37,16 @@ class Crane(object):
         self.sect_passed = np.zeros(
             (self.n_sect_2d, self.n_sect_3d), dtype=bool)
 
+        self.sect_passed_2d = np.zeros((self.n_sect_2d, 4))
+        self.prev_2d_sect = -1
+
     def clear_sect_passed(self):
         """Clears history of which sectors have already been passed through
         """
+        self.sect_passed_2d = np.zeros((self.n_sect_2d, 4))
         self.sect_passed = np.zeros(
             (self.n_sect_2d, self.n_sect_3d), dtype=bool)
+        self.prev_2d_sect = -1
 
 
 def main():
@@ -76,6 +84,10 @@ def main():
     msh_x, msh_y, msh_z = sph2car(r_s, msh_phi, msh_theta)
     p_x, p_y, p_z = sph2car(r_s, phi_init, theta_init)
 
+    if not p_i == myc.prev_2d_sect:
+        myc.sect_passed_2d[p_i] = [p_x, p_y, p_z, phi_init]
+        myc.prev_2d_sect = p_i
+
     msh_x += myc.tow_x
     msh_y += myc.tow_y
     msh_z += myc.tow_z + myc.tow_h
@@ -104,6 +116,10 @@ def main():
         msh_x, msh_y, msh_z = sph2car(r_s, msh_phi, msh_theta)
         p_x, p_y, p_z = sph2car(r_s, new_phi, new_theta)
 
+        if not p_i == myc.prev_2d_sect:
+            myc.sect_passed_2d[p_i] = [p_x, p_y, p_z, new_phi]
+            myc.prev_2d_sect = p_i
+
         msh_x += myc.tow_x
         msh_y += myc.tow_y
         msh_z += myc.tow_z + myc.tow_h
@@ -123,8 +139,7 @@ def main():
     sphi.on_changed(update)
 
     my_ax.view_init(45, 0)
-    #my_ax.view_init(0, 90)
-    set_axes_equal(my_ax)
+    set_axes_equal(my_ax, myc)
 
     def press(event):
         if event.key == 'right':
@@ -195,7 +210,8 @@ def plot_all(my_ax, myc, msh_x, msh_y, msh_z, p_x, p_y, p_z, cur_phi):
     """Plots a 3D surface as well as the line from center to current point
 
     Args:
-        my_ax (plt figure 3D subplot): where results are plottes
+        my_ax (plt figure 3D subplot): where results are plotted
+        myc (Crane): instance containing all physical parameters and history
         msh_x (np.array): current mesh x coordinates
         msh_y (np.array): current mesh y coordinates
         msh_z (np.array): current mesh z coordinates
@@ -207,8 +223,15 @@ def plot_all(my_ax, myc, msh_x, msh_y, msh_z, p_x, p_y, p_z, cur_phi):
     my_ax.plot(
         [myc.tow_x, myc.tow_x, p_x], [myc.tow_y, myc.tow_y, p_y],
         [myc.tow_z, myc.tow_z+myc.tow_h, p_z], c="green")
-    my_ax.scatter([p_x, p_x], [p_y, p_y], [0, p_z], s=50, c="cyan")
+    my_ax.scatter([p_x, p_x], [p_y, p_y], [0, p_z], s=50, c="green")
 
+    plot_footprint_hist(my_ax, myc)
+    plot_footprint(my_ax, p_x, p_y, p_z, cur_phi, "black")
+
+    set_axes_equal(my_ax, myc)
+
+
+def plot_footprint(my_ax, p_x, p_y, p_z, cur_phi, colr="green"):
     delta_h = p_z - 0
     delta_r = delta_h*np.tan(np.radians(0.5*45.4))
     delta_t = delta_h*np.tan(np.radians(0.5*64.2))
@@ -217,34 +240,59 @@ def plot_all(my_ax, myc, msh_x, msh_y, msh_z, p_x, p_y, p_z, cur_phi):
 
     p_r = np.sqrt(p_x**2+p_y**2)
 
-    pxs = [(p_r-delta_r)*np.cos(np.radians(cur_phi)),
-            (p_r+delta_r)*np.cos(np.radians(cur_phi)),
-            p_r*np.cos(np.radians(cur_phi))-delta_t*np.sin(np.radians(cur_phi)),
-            p_r*np.cos(np.radians(cur_phi))+delta_t*np.sin(np.radians(cur_phi)),
-            ]
-    pys = [(p_r-delta_r)*np.sin(np.radians(cur_phi)),
-            (p_r+delta_r)*np.sin(np.radians(cur_phi)),
-            p_r*np.sin(np.radians(cur_phi))+delta_t*np.cos(np.radians(cur_phi)),
-            p_r*np.sin(np.radians(cur_phi))-delta_t*np.cos(np.radians(cur_phi)),
-            ]
+    cur_phi_rad = np.radians(cur_phi)
+
+    delta_tx = delta_t*np.sin(cur_phi_rad)
+    delta_ty = delta_t*np.cos(cur_phi_rad)
+
+    if PLOT_CORNERS_RADIAL:
+        pxs = [(p_r-delta_r)*np.cos(cur_phi_rad),
+               (p_r+delta_r)*np.cos(cur_phi_rad),
+               p_x-delta_tx,
+               p_x+delta_tx]
+
+        pys = [(p_r-delta_r)*np.sin(cur_phi_rad),
+               (p_r+delta_r)*np.sin(cur_phi_rad),
+               p_y+delta_ty,
+               p_y-delta_ty]
+
+        pzs = [0, 0, 0, 0]
+
+        my_ax.scatter(pxs, pys, pzs, s=50, c="cyan")
+
+    diag_phi_left = np.radians(cur_phi-hfov_d)
+    diag_phi_right = np.radians(cur_phi+hfov_d)
+
+    pxs = [p_x-delta_m*np.sin(diag_phi_left),
+           p_x-delta_m*np.sin(diag_phi_right),
+           p_x+delta_m*np.sin(diag_phi_left),
+           p_x+delta_m*np.sin(diag_phi_right)]
+
+    pys = [p_y+delta_m*np.cos(diag_phi_left),
+           p_y+delta_m*np.cos(diag_phi_right),
+           p_y-delta_m*np.cos(diag_phi_left),
+           p_y-delta_m*np.cos(diag_phi_right)]
+
     pzs = [0, 0, 0, 0]
-    my_ax.scatter(pxs, pys, pzs, s=50, c="green")
 
-    pxs = [p_r*np.cos(np.radians(cur_phi))-delta_m*np.sin(np.radians(cur_phi-hfov_d)),
-            p_r*np.cos(np.radians(cur_phi))-delta_m*np.sin(np.radians(cur_phi+hfov_d)),
-            p_r*np.cos(np.radians(cur_phi))+delta_m*np.sin(np.radians(cur_phi-hfov_d)),
-            p_r*np.cos(np.radians(cur_phi))+delta_m*np.sin(np.radians(cur_phi+hfov_d)),
-            ]
-    pys = [p_r*np.sin(np.radians(cur_phi))+delta_m*np.cos(np.radians(cur_phi-hfov_d)),
-            p_r*np.sin(np.radians(cur_phi))+delta_m*np.cos(np.radians(cur_phi+hfov_d)),
-            p_r*np.sin(np.radians(cur_phi))-delta_m*np.cos(np.radians(cur_phi-hfov_d)),
-            p_r*np.sin(np.radians(cur_phi))-delta_m*np.cos(np.radians(cur_phi+hfov_d)),
-            ]
-    pzs = [0, 0, 0, 0]
-    my_ax.scatter(pxs, pys, pzs, s=50, c="blue")
+    try:
+        my_ax.plot_trisurf(pxs, pys, pzs, color=colr, alpha=0.1)
+    except ValueError:
+        print("No distinct points, skipping")
 
-    my_ax.plot_trisurf(pxs, pys, pzs, color="red", alpha=0.1)
+    if PLOT_CORNERS_EDGE:
+        my_ax.scatter(pxs, pys, pzs, s=50, c="cyan")
 
+
+def set_axes_equal(my_ax, myc):
+    """Make axes of 3D plot have equal scale so that spheres appear as spheres,
+    cubes as cubes, etc..  This is one possible solution to Matplotlib's
+    my_ax.set_aspect('equal') and my_ax.axis('equal') not working for 3D.
+
+    Args
+        my_ax (plt figure subplot): where sectors should be plotted
+        myc (Crane): instance containing all physical parameters and history
+    """
     my_ax.set_xlabel('X axis')
     my_ax.set_ylabel('Y axis')
     my_ax.set_zlabel('Z axis')
@@ -253,17 +301,7 @@ def plot_all(my_ax, myc, msh_x, msh_y, msh_z, p_x, p_y, p_z, cur_phi):
     my_ax.set_ylim3d([myc.tow_y-b_b, myc.tow_y+b_b])
     my_ax.set_zlim3d([myc.tow_z, myc.tow_z+myc.tow_h+b_b])
     my_ax.set_aspect('equal')
-    set_axes_equal(my_ax)
 
-
-def set_axes_equal(my_ax):
-    '''Make axes of 3D plot have equal scale so that spheres appear as spheres,
-    cubes as cubes, etc..  This is one possible solution to Matplotlib's
-    my_ax.set_aspect('equal') and my_ax.axis('equal') not working for 3D.
-
-    Input
-      my_ax: a matplotlib axis, e.g., as output from plt.gca().
-    '''
     x_limits = my_ax.get_xlim3d()
     y_limits = my_ax.get_ylim3d()
     z_limits = my_ax.get_zlim3d()
@@ -288,7 +326,8 @@ def plot_sect_hist(my_ax, myc):
     """Plots all sectors that have already been passed
 
     Args:
-        my_ax (plt figure subplot): Where sectors should be plotted
+        my_ax (plt figure subplot): where sectors should be plotted
+        myc (Crane): instance containing all physical parameters and history
     """
     for i in range(myc.sect_passed.shape[0]):
         for j in range(myc.sect_passed.shape[1]):
@@ -312,6 +351,22 @@ def plot_sect_hist(my_ax, myc):
 
                 my_ax.plot_surface(
                     msh_x, msh_y, msh_z, color="blue", alpha=0.1)
+
+
+def plot_footprint_hist(my_ax, myc):
+    """Plots the cam footprints on sectors that have already been passed over
+
+    Args:
+        my_ax (plt figure subplot): where sectors should be plotted
+        myc (Crane): instance containing all physical parameters and history
+    """
+    for i in range(myc.sect_passed_2d.shape[0]):
+        if myc.sect_passed_2d[i].any():
+            plot_footprint(my_ax,
+                           myc.sect_passed_2d[i, 0],
+                           myc.sect_passed_2d[i, 1],
+                           myc.sect_passed_2d[i, 2]+myc.tow_h,
+                           myc.sect_passed_2d[i, 3])
 
 
 if __name__ == '__main__':
