@@ -10,7 +10,6 @@ from mpl_toolkits.mplot3d import axes3d
 
 PLOT_CORNERS_RADIAL = False
 PLOT_CORNERS_EDGE = False
-USE_CASE = True
 
 np.set_printoptions(sign='+', precision=2, suppress=True)
 
@@ -26,8 +25,8 @@ class Crane(object):
         self.tow_y = 0.
         self.tow_z = 0.
 
-        self.tow_h = 100  # 43.6  # 60
-        self.jib_l = 100  # 61.07  # 68
+        self.tow_h = 43.6  # 60
+        self.jib_l = 61.07  # 68
 
         self.hfov_v = 0.5*45.4
         self.hfov_h = 0.5*64.2
@@ -48,6 +47,9 @@ class Crane(object):
 
         self.plot_cur_footprint = True
         self.plot_footprint_hist = False
+
+        self.luf_ang = 0
+        self.luf_ang_rad = 0
 
         self.fix_ang = 30
         self.fix_ang_rad = np.radians(self.fix_ang)
@@ -124,6 +126,9 @@ def main():
         new_theta = sthet.val
         t_l, t_r, t_i = get_interval(theta_l, new_theta)
         theta = np.linspace(t_l, t_r, myc.n_wireframe+1)
+
+        myc.luf_ang = 90 - new_theta
+        myc.luf_ang_rad = np.radians(90 - new_theta)
 
         myc.fix_ang = sfix.val
         myc.fix_ang_rad = np.radians(sfix.val)
@@ -297,14 +302,9 @@ def plot_footprint(my_ax, myc, p_x, p_y, p_z, cur_phi, colr="black", alp=0.1):
     delta_t = delta_h*np.tan(np.radians(myc.hfov_h))
     delta_m = np.sqrt(delta_r**2+delta_t**2)
 
-    if USE_CASE:
-        hfov_d = np.degrees(np.arctan2(delta_h, delta_m))  # why not dm, dh??
-    else:
-        hfov_d = np.degrees(np.arctan2(delta_m, delta_h))
-
     if not myc.fix_ang < 0.0:
         plot_skewed_footprint(my_ax, myc, p_x, p_y, p_z, cur_phi, delta_h,
-                              delta_r, delta_t, delta_m, hfov_d)
+                              delta_r, delta_t, delta_m)
 
     p_r = np.sqrt(p_x**2+p_y**2)
     p_r_in = p_r - delta_r
@@ -328,36 +328,8 @@ def plot_footprint(my_ax, myc, p_x, p_y, p_z, cur_phi, colr="black", alp=0.1):
     p_r_in_x_ur = p_r_out_x + delta_t*np.sin(cur_phi_rad)
     p_r_in_y_ur = p_r_out_y - delta_t*np.cos(cur_phi_rad)
 
-    diag_phi_left = np.radians(cur_phi-hfov_d)
-    diag_phi_right = np.radians(cur_phi+hfov_d)
-
-    if USE_CASE:
-        pxs = [p_r_in_x_ll, p_r_in_x_ul, p_r_in_x_ur, p_r_in_x_lr]
-
-        pys = [p_r_in_y_ll, p_r_in_y_ul, p_r_in_y_ur, p_r_in_y_lr]
-        
-        """
-        pxs = [p_x + delta_m*np.cos(diag_phi_right),
-               p_x - delta_m*np.cos(diag_phi_left),
-               p_x - delta_m*np.cos(diag_phi_right),
-               p_x + delta_m*np.cos(diag_phi_left)]
-
-        pys = [p_y + delta_m*np.sin(diag_phi_right),
-               p_y - delta_m*np.sin(diag_phi_left),
-               p_y - delta_m*np.sin(diag_phi_right),
-               p_y + delta_m*np.sin(diag_phi_left)]
-        """
-    else:
-        pxs = [p_x - delta_m*np.sin(diag_phi_left),
-               p_x - delta_m*np.sin(diag_phi_right),
-               p_x + delta_m*np.sin(diag_phi_left),
-               p_x + delta_m*np.sin(diag_phi_right)]
-
-        pys = [p_y + delta_m*np.cos(diag_phi_left),
-               p_y + delta_m*np.cos(diag_phi_right),
-               p_y - delta_m*np.cos(diag_phi_left),
-               p_y - delta_m*np.cos(diag_phi_right)]
-
+    pxs = [p_r_in_x_ll, p_r_in_x_ul, p_r_in_x_ur, p_r_in_x_lr]
+    pys = [p_r_in_y_ll, p_r_in_y_ul, p_r_in_y_ur, p_r_in_y_lr]
     pzs = [0, 0, 0, 0]
 
     try:
@@ -390,7 +362,7 @@ def plot_footprint(my_ax, myc, p_x, p_y, p_z, cur_phi, colr="black", alp=0.1):
 
 
 def plot_skewed_footprint(my_ax, myc, p_x, p_y, p_z, cur_phi, delta_h, delta_r,
-                          delta_t, delta_m, hfov_d, colr="black", alp=0.25):
+                          delta_t, delta_m, colr="black", alp=0.25):
     """[summary]
 
     Args:
@@ -404,22 +376,23 @@ def plot_skewed_footprint(my_ax, myc, p_x, p_y, p_z, cur_phi, delta_h, delta_r,
         delta_r ([type]): [description]
         delta_t ([type]): [description]
         delta_m ([type]): [description]
-        hfov_d ([type]): [description]
         colr (str, optional): [description]. Defaults to "black".
         alp (float, optional): [description]. Defaults to 0.25.
     """
+    print(p_x, p_y, p_z)
+
     if myc.hfov_v+myc.fix_ang < 90.0:
         delta_r_in = delta_h*np.tan(np.radians(myc.hfov_v-myc.fix_ang))
         delta_r_out = delta_h*np.tan(np.radians(myc.hfov_v+myc.fix_ang))
 
         print(np.array([delta_r, delta_r_in, delta_r_out,
-                        np.sqrt(p_x**2+p_y**2), p_z, delta_m, hfov_d]))
+                        np.sqrt(p_x**2+p_y**2), p_z, delta_m]))
 
-    p_r_new = np.sqrt(p_x**2+p_y**2) - delta_h*np.tan(myc.fix_ang_rad)
+    p_r_new = np.sqrt(p_x**2+p_y**2) - delta_h*np.tan(myc.fix_ang_rad-myc.luf_ang_rad)
     p_r_new_in = np.sqrt(p_x**2+p_y**2) - delta_h*np.tan(
-        myc.fix_ang_rad+np.radians(myc.hfov_v))
+        myc.fix_ang_rad+np.radians(myc.hfov_v)-myc.luf_ang_rad)
     p_r_new_out = np.sqrt(p_x**2+p_y**2) - delta_h*np.tan(
-        myc.fix_ang_rad-np.radians(myc.hfov_v))
+        myc.fix_ang_rad-np.radians(myc.hfov_v)-myc.luf_ang_rad)
 
     cur_phi_rad = np.radians(cur_phi)
 
