@@ -259,7 +259,6 @@ def get_interval(lst, val):
     Returns:
         2 floats and 1 int: the interval boundaries and the left index
     """
-    print(lst, val)
     for i in range(len(lst)-1):
         if lst[i] <= val <= lst[i+1]:
             # print("{} is between {} and {}".format(val, lst[i], lst[i+1]))
