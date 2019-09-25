@@ -31,7 +31,7 @@ class Crane(object):
         self.hfov_v = 0.5*45.4
         self.hfov_h = 0.5*64.2
 
-        self.n_sect_2d = 9
+        self.n_sect_2d = 10
         self.i_sect_2d = 360./self.n_sect_2d
         self.n_sect_3d = 4
         self.i_sect_3d = 90./self.n_sect_3d
@@ -42,7 +42,7 @@ class Crane(object):
         self.sect_passed = np.zeros(
             (self.n_sect_2d, self.n_sect_3d), dtype=bool)
 
-        self.sect_passed_2d = np.zeros((self.n_sect_2d, 4))
+        self.sect_passed_2d = np.zeros((self.n_sect_2d, 5))
         self.prev_2d_sect = -1
 
         self.plot_cur_footprint = True
@@ -103,7 +103,7 @@ def main():
     p_x, p_y, p_z = sph2car(r_s, phi_init, theta_init)
 
     if not p_i == myc.prev_2d_sect:
-        myc.sect_passed_2d[p_i] = [p_x, p_y, p_z, phi_init]
+        myc.sect_passed_2d[p_i] = [p_x, p_y, p_z, phi_init, myc.luf_ang_rad]
         myc.prev_2d_sect = p_i
 
     msh_x += myc.tow_x
@@ -114,7 +114,10 @@ def main():
     p_y += myc.tow_y
     p_z += myc.tow_z + myc.tow_h
 
-    plot_all(my_ax, myc, msh_x, msh_y, msh_z, p_x, p_y, p_z, phi_init)
+    cam_p = [p_x, p_y, p_z]
+    msh_p = [msh_x, msh_y, msh_z]
+
+    plot_all(my_ax, myc, msh_p, cam_p, phi_init)
 
     def update(val):
         my_ax.clear()
@@ -141,7 +144,7 @@ def main():
         p_x, p_y, p_z = sph2car(r_s, new_phi, new_theta)
 
         if not p_i == myc.prev_2d_sect:
-            myc.sect_passed_2d[p_i] = [p_x, p_y, p_z, new_phi]
+            myc.sect_passed_2d[p_i] = [p_x, p_y, p_z, new_phi, myc.luf_ang_rad]
             myc.prev_2d_sect = p_i
 
         msh_x += myc.tow_x
@@ -152,7 +155,10 @@ def main():
         p_y += myc.tow_y
         p_z += myc.tow_z + myc.tow_h
 
-        plot_all(my_ax, myc, msh_x, msh_y, msh_z, p_x, p_y, p_z, new_phi)
+        cam_p = [p_x, p_y, p_z]
+        msh_p = [msh_x, msh_y, msh_z]
+
+        plot_all(my_ax, myc, msh_p, cam_p, new_phi)
 
         fig.canvas.draw_idle()
 
@@ -254,27 +260,23 @@ def get_interval(lst, val):
     sys.exit()
 
 
-def plot_all(my_ax, myc, msh_x, msh_y, msh_z, p_x, p_y, p_z, cur_phi):
+def plot_all(my_ax, myc, msh_p, cam_p, cur_phi):
     """Plots a 3D surface as well as the line from center to current point
 
     Args:
         my_ax (plt figure 3D subplot): where results are plotted
         myc (Crane): instance containing all physical parameters and history
-        msh_x (np.array): current mesh x coordinates
-        msh_y (np.array): current mesh y coordinates
-        msh_z (np.array): current mesh z coordinates
-        p_x (float): current point x coordinate
-        p_y (float): current point y coordinate
-        p_z (float): current point z coordinate
+        msh_p (np.array): current mesh coordinates
+        cam_p (float): current point's coordinates
     """
-    my_ax.plot_wireframe(msh_x, msh_y, msh_z, colors="green")
+    my_ax.plot_wireframe(*msh_p, colors="green")
     my_ax.plot(
-        [myc.tow_x, myc.tow_x, p_x], [myc.tow_y, myc.tow_y, p_y],
-        [myc.tow_z, myc.tow_z+myc.tow_h, p_z], c="green")
-    my_ax.scatter(p_x, p_y, p_z, s=50, c="green")
+        [myc.tow_x, myc.tow_x, cam_p[0]], [myc.tow_y, myc.tow_y, cam_p[1]],
+        [myc.tow_z, myc.tow_z+myc.tow_h, cam_p[2]], c="green")
+    my_ax.scatter(*cam_p, s=50, c="green")
 
     if myc.plot_cur_footprint:
-        plot_footprint(my_ax, myc, p_x, p_y, p_z, cur_phi, "green", 0.75)
+        plot_footprint(my_ax, myc, cam_p, cur_phi, None, "green", 0.3, 20)
 
     if myc.plot_footprint_hist:
         plot_footprint_hist(my_ax, myc)
@@ -282,31 +284,31 @@ def plot_all(my_ax, myc, msh_x, msh_y, msh_z, p_x, p_y, p_z, cur_phi):
     set_axes_equal(my_ax, myc)
 
 
-def plot_footprint(my_ax, myc, p_x, p_y, p_z, cur_phi, colr="black", alp=0.1):
+def plot_footprint(my_ax, myc, cam_p, cur_phi, luf_ang_rad=None, colr="black",
+                   alp=0.1, sc_size=10):
     """Plots a single camera footprint on the ground
 
     Args:
         my_ax (plt figure 3D subplot): where results are plotted
         myc (Crane): instance containing all physical parameters and history
-        p_x (float): current point x coordinate
-        p_y (float): current point y coordinate
-        p_z (float): current point z coordinate
+        cam_p (float): current point's coordinates
         cur_phi ([type]): [description]
         colr (str, optional): color of surface. Defaults to "black".
         alp (float, optional): alpha value of surface. Defaults to 0.1.
     """
-    my_ax.scatter(p_x, p_y, 0, s=50, c="green")
+    if luf_ang_rad is None:
+        luf_ang_rad = myc.luf_ang_rad
 
-    delta_h = p_z - 0
+    delta_h = cam_p[2] - 0
     delta_r = delta_h*np.tan(np.radians(myc.hfov_v))
     delta_t = delta_h*np.tan(np.radians(myc.hfov_h))
-    delta_m = np.sqrt(delta_r**2+delta_t**2)
 
     if not myc.fix_ang < 0.0:
-        plot_skewed_footprint(my_ax, myc, p_x, p_y, p_z, cur_phi, delta_h,
-                              delta_r, delta_t, delta_m)
+        plot_skewed_footprint(my_ax, myc, cam_p, cur_phi, luf_ang_rad, delta_h,
+                              delta_t, colr, alp, sc_size)
 
-    p_r = np.sqrt(p_x**2+p_y**2)
+    """
+    p_r = np.sqrt(cam_p[0]**2+cam_p[1]**2)
     p_r_in = p_r - delta_r
     p_r_out = p_r + delta_r
 
@@ -346,53 +348,44 @@ def plot_footprint(my_ax, myc, p_x, p_y, p_z, cur_phi, colr="black", alp=0.1):
         delta_tx = delta_t*np.sin(cur_phi_rad)
         delta_ty = delta_t*np.cos(cur_phi_rad)
 
-        pxs = [p_x-delta_rx,
-               p_x+delta_rx,
-               p_x-delta_tx,
-               p_x+delta_tx]
+        pxs = [cam_p[0]-delta_rx,
+               cam_p[0]+delta_rx,
+               cam_p[0]-delta_tx,
+               cam_p[0]+delta_tx]
 
-        pys = [p_y-delta_ry,
-               p_y+delta_ry,
-               p_y+delta_ty,
-               p_y-delta_ty]
+        pys = [cam_p[0]-delta_ry,
+               cam_p[0]+delta_ry,
+               cam_p[0]+delta_ty,
+               cam_p[0]-delta_ty]
 
         pzs = [0, 0, 0, 0]
 
         my_ax.scatter(pxs, pys, pzs, s=50, c="cyan")
+    """
 
 
-def plot_skewed_footprint(my_ax, myc, p_x, p_y, p_z, cur_phi, delta_h, delta_r,
-                          delta_t, delta_m, colr="black", alp=0.25):
+def plot_skewed_footprint(my_ax, myc, cam_p, cur_phi, luf_ang_rad, delta_h,
+                          delta_t, colr="black", alp=0.1, sc_size=10):
     """[summary]
 
     Args:
         my_ax ([type]): [description]
         myc ([type]): [description]
-        p_x ([type]): [description]
-        p_y ([type]): [description]
-        p_z ([type]): [description]
+        cam_p ([type]): [description]
         cur_phi ([type]): [description]
         delta_h ([type]): [description]
         delta_r ([type]): [description]
         delta_t ([type]): [description]
-        delta_m ([type]): [description]
         colr (str, optional): [description]. Defaults to "black".
         alp (float, optional): [description]. Defaults to 0.25.
     """
-    print(p_x, p_y, p_z)
+    p_r_old = np.sqrt(cam_p[0]**2+cam_p[1]**2)
 
-    if myc.hfov_v+myc.fix_ang < 90.0:
-        delta_r_in = delta_h*np.tan(np.radians(myc.hfov_v-myc.fix_ang))
-        delta_r_out = delta_h*np.tan(np.radians(myc.hfov_v+myc.fix_ang))
-
-        print(np.array([delta_r, delta_r_in, delta_r_out,
-                        np.sqrt(p_x**2+p_y**2), p_z, delta_m]))
-
-    p_r_new = np.sqrt(p_x**2+p_y**2) - delta_h*np.tan(myc.fix_ang_rad-myc.luf_ang_rad)
-    p_r_new_in = np.sqrt(p_x**2+p_y**2) - delta_h*np.tan(
-        myc.fix_ang_rad+np.radians(myc.hfov_v)-myc.luf_ang_rad)
-    p_r_new_out = np.sqrt(p_x**2+p_y**2) - delta_h*np.tan(
-        myc.fix_ang_rad-np.radians(myc.hfov_v)-myc.luf_ang_rad)
+    p_r_new = p_r_old - delta_h*np.tan(myc.fix_ang_rad-luf_ang_rad)
+    p_r_new_in = p_r_old - delta_h*np.tan(
+        myc.fix_ang_rad+np.radians(myc.hfov_v)-luf_ang_rad)
+    p_r_new_out = p_r_old - delta_h*np.tan(
+        myc.fix_ang_rad-np.radians(myc.hfov_v)-luf_ang_rad)
 
     cur_phi_rad = np.radians(cur_phi)
 
@@ -415,11 +408,20 @@ def plot_skewed_footprint(my_ax, myc, p_x, p_y, p_z, cur_phi, delta_h, delta_r,
     p_t_x_ur = p_r_new_out_x + delta_t*np.sin(cur_phi_rad)
     p_t_y_ur = p_r_new_out_y - delta_t*np.cos(cur_phi_rad)
 
-    pxs = [p_r_new_x, p_r_new_in_x, p_r_new_out_x, p_t_x_ll, p_t_x_ul, p_t_x_lr, p_t_x_ur]
-    pys = [p_r_new_y, p_r_new_in_y, p_r_new_out_y, p_t_y_ll, p_t_y_ul, p_t_y_lr, p_t_y_ur]
-    pzs = [0, 0, 0, 0, 0, 0, 0]
+    pxs = [p_r_new_x, p_t_x_ll, p_t_x_ul, p_t_x_lr, p_t_x_ur]
+    pys = [p_r_new_y, p_t_y_ll, p_t_y_ul, p_t_y_lr, p_t_y_ur]
+    pzs = [0, 0, 0, 0, 0]
 
-    my_ax.scatter(pxs, pys, pzs, s=50, c=colr, alpha=alp)
+    my_ax.plot([cam_p[0], p_t_x_ll], [cam_p[1], p_t_y_ll], [cam_p[2], 0],
+               color=colr, alpha=alp)
+    my_ax.plot([cam_p[0], p_t_x_lr], [cam_p[1], p_t_y_lr], [cam_p[2], 0],
+               color=colr, alpha=alp)
+    my_ax.plot([cam_p[0], p_t_x_ul], [cam_p[1], p_t_y_ul], [cam_p[2], 0],
+               color=colr, alpha=alp)
+    my_ax.plot([cam_p[0], p_t_x_ur], [cam_p[1], p_t_y_ur], [cam_p[2], 0],
+               color=colr, alpha=alp)
+
+    my_ax.scatter(pxs, pys, pzs, s=sc_size, c=colr, alpha=alp)
     my_ax.plot_trisurf(pxs, pys, pzs, color=colr, alpha=alp)
 
 
@@ -501,16 +503,15 @@ def plot_footprint_hist(my_ax, myc):
     """
     for i in range(myc.sect_passed_2d.shape[0]):
         if myc.sect_passed_2d[i].any():
-            my_ax.scatter(myc.sect_passed_2d[i, 0] + myc.tow_x,
-                          myc.sect_passed_2d[i, 1] + myc.tow_y,
-                          0, c="black")
+            cam_p_ftprnt = [myc.sect_passed_2d[i, 0] + myc.tow_x,
+                            myc.sect_passed_2d[i, 1] + myc.tow_y,
+                            myc.sect_passed_2d[i, 2] + myc.tow_z + myc.tow_h]
 
             plot_footprint(my_ax,
                            myc,
-                           myc.sect_passed_2d[i, 0] + myc.tow_x,
-                           myc.sect_passed_2d[i, 1] + myc.tow_y,
-                           myc.sect_passed_2d[i, 2] + myc.tow_z + myc.tow_h,
-                           myc.sect_passed_2d[i, 3])
+                           cam_p_ftprnt,
+                           myc.sect_passed_2d[i, 3],
+                           myc.sect_passed_2d[i, 4])
 
 
 if __name__ == '__main__':
