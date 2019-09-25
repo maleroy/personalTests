@@ -8,9 +8,6 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
 from mpl_toolkits.mplot3d import axes3d
 
-PLOT_CORNERS_RADIAL = False
-PLOT_CORNERS_EDGE = False
-
 np.set_printoptions(sign='+', precision=2, suppress=True)
 
 
@@ -321,62 +318,6 @@ def plot_footprint(my_ax, myc, cam_p, cur_phi, luf_ang_rad=None,
                                               luf_ang_rad, draw_trace, delta_h,
                                               delta_t, colr, alp, sc_size)
         return pxs, pys, pzs
-
-    """
-    p_r = np.sqrt(cam_p[0]**2+cam_p[1]**2)
-    p_r_in = p_r - delta_r
-    p_r_out = p_r + delta_r
-
-    cur_phi_rad = np.radians(cur_phi)
-    p_r_in_x = p_r_in*np.cos(cur_phi_rad)
-    p_r_in_y = p_r_in*np.sin(cur_phi_rad)
-    p_r_out_x = p_r_out*np.cos(cur_phi_rad)
-    p_r_out_y = p_r_out*np.sin(cur_phi_rad)
-
-    p_r_in_x_ll = p_r_in_x - delta_t*np.sin(cur_phi_rad)
-    p_r_in_y_ll = p_r_in_y + delta_t*np.cos(cur_phi_rad)
-
-    p_r_in_x_ul = p_r_out_x - delta_t*np.sin(cur_phi_rad)
-    p_r_in_y_ul = p_r_out_y + delta_t*np.cos(cur_phi_rad)
-
-    p_r_in_x_lr = p_r_in_x + delta_t*np.sin(cur_phi_rad)
-    p_r_in_y_lr = p_r_in_y - delta_t*np.cos(cur_phi_rad)
-
-    p_r_in_x_ur = p_r_out_x + delta_t*np.sin(cur_phi_rad)
-    p_r_in_y_ur = p_r_out_y - delta_t*np.cos(cur_phi_rad)
-
-    pxs = [p_r_in_x_ll, p_r_in_x_ul, p_r_in_x_ur, p_r_in_x_lr]
-    pys = [p_r_in_y_ll, p_r_in_y_ul, p_r_in_y_ur, p_r_in_y_lr]
-    pzs = [0, 0, 0, 0]
-
-    try:
-        my_ax.plot_trisurf(pxs, pys, pzs, color=colr, alpha=alp)
-    except ValueError:
-        print("No distinct points, skipping")
-
-    if PLOT_CORNERS_EDGE:
-        my_ax.scatter(pxs, pys, pzs, s=50, c="cyan")
-
-    if PLOT_CORNERS_RADIAL:
-        delta_rx = delta_r*np.cos(cur_phi_rad)
-        delta_ry = delta_r*np.sin(cur_phi_rad)
-        delta_tx = delta_t*np.sin(cur_phi_rad)
-        delta_ty = delta_t*np.cos(cur_phi_rad)
-
-        pxs = [cam_p[0]-delta_rx,
-               cam_p[0]+delta_rx,
-               cam_p[0]-delta_tx,
-               cam_p[0]+delta_tx]
-
-        pys = [cam_p[0]-delta_ry,
-               cam_p[0]+delta_ry,
-               cam_p[0]+delta_ty,
-               cam_p[0]-delta_ty]
-
-        pzs = [0, 0, 0, 0]
-
-        my_ax.scatter(pxs, pys, pzs, s=50, c="cyan")
-    """
 
 
 def plot_skewed_footprint(my_ax, myc, cam_p, cur_phi, luf_ang_rad, draw_trace,
