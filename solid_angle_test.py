@@ -10,6 +10,7 @@ from mpl_toolkits.mplot3d import axes3d
 
 PLOT_CORNERS_RADIAL = False
 PLOT_CORNERS_EDGE = False
+USE_CASE = True
 
 np.set_printoptions(sign='+', precision=2, suppress=True)
 
@@ -25,8 +26,8 @@ class Crane(object):
         self.tow_y = 0.
         self.tow_z = 0.
 
-        self.tow_h = 43.6  # 60
-        self.jib_l = 61.07  # 68
+        self.tow_h = 100  # 43.6  # 60
+        self.jib_l = 100  # 61.07  # 68
 
         self.hfov_h = 0.5*45.4
         self.hfov_v = 0.5*64.2
@@ -46,6 +47,7 @@ class Crane(object):
         self.prev_2d_sect = -1
 
         self.plot_cur_footprint = True
+        self.plot_footprint_hist = False
 
         self.fix_ang = 30
         self.fix_ang_rad = np.radians(self.fix_ang)
@@ -81,6 +83,10 @@ def main():
     axtheta = plt.axes([0.1, 0.1, 0.2, 0.01])
     sthet = Slider(axtheta, 'Polar angle (theta)', theta_l[0], theta_l[-1],
                    valinit=theta_init, valstep=1, color="blue")
+
+    axfix = plt.axes([0.1, 0.05, 0.2, 0.01])
+    sfix = Slider(axfix, 'Cam fixed angle', 0, 80,
+                  valinit=myc.fix_ang, valstep=5, color="blue")
 
     p_a, p_b, p_i = get_interval(phi_l, phi_init)
     phi = np.linspace(p_a, p_b, myc.n_wireframe+1)
@@ -119,6 +125,9 @@ def main():
         t_l, t_r, t_i = get_interval(theta_l, new_theta)
         theta = np.linspace(t_l, t_r, myc.n_wireframe+1)
 
+        myc.fix_ang = sfix.val
+        myc.fix_ang_rad = np.radians(sfix.val)
+
         myc.sect_passed[p_i, t_i] = True
         plot_sect_hist(my_ax, myc)
 
@@ -154,37 +163,49 @@ def main():
     def press(event):
         if event.key == 'right':
             n_v = (
-                sphi.valmax if sphi.val+5 > sphi.valmax else sphi.val+5)
+                sphi.valmax if sphi.val+sphi.valstep*5 > sphi.valmax else (
+                    sphi.val+sphi.valstep*5))
             sphi.set_val(n_v)
         elif event.key == 'left':
             n_v = (
-                sphi.valmin if sphi.val-5 < sphi.valmin else sphi.val-5)
+                sphi.valmin if sphi.val-sphi.valstep*5 < sphi.valmin else (
+                    sphi.val-sphi.valstep*5))
             sphi.set_val(n_v)
         elif event.key == 'up':
             n_v = (
-                sthet.valmin if sthet.val-5 < sthet.valmin else sthet.val-5)
+                sthet.valmin if sthet.val-sthet.valstep*5 < sthet.valmin else (
+                    sthet.val-sthet.valstep*5))
             sthet.set_val(n_v)
         elif event.key == 'down':
             n_v = (
-                sthet.valmax if sthet.val+5 > sthet.valmax else sthet.val+5)
+                sthet.valmax if sthet.val+sthet.valstep*5 > sthet.valmax else (
+                    sthet.val+sthet.valstep*5))
             sthet.set_val(n_v)
+        elif event.key == 'y':
+            n_v = (
+                sfix.valmin if sfix.val-sfix.valstep < sfix.valmin else (
+                    sfix.val-sfix.valstep))
+            sfix.set_val(n_v)
+        elif event.key == 'x':
+            n_v = (
+                sfix.valmax if sfix.val+sfix.valstep > sfix.valmax else (
+                    sfix.val+sfix.valstep))
+            sfix.set_val(n_v)
         elif event.key == 'c':
             myc.clear_sect_passed()
-            update(None)
         elif event.key == 'h':
             myc.plot_cur_footprint = not myc.plot_cur_footprint
-            update(None)
+        elif event.key == 'j':
+            myc.plot_footprint_hist = not myc.plot_footprint_hist
         elif event.key == 't':
             my_ax.view_init(90, 0)
-            update(None)
         elif event.key == 'f':
             my_ax.view_init(0, 0)
-            update(None)
         elif event.key == 'o':
             my_ax.view_init(45, 0)
-            update(None)
         else:
             pass
+        update(None)
 
     fig.canvas.mpl_connect('key_press_event', press)
 
@@ -245,11 +266,13 @@ def plot_all(my_ax, myc, msh_x, msh_y, msh_z, p_x, p_y, p_z, cur_phi):
     my_ax.plot(
         [myc.tow_x, myc.tow_x, p_x], [myc.tow_y, myc.tow_y, p_y],
         [myc.tow_z, myc.tow_z+myc.tow_h, p_z], c="green")
-    my_ax.scatter([p_x, p_x], [p_y, p_y], [p_z, 0], s=50, c="green")
+    my_ax.scatter(p_x, p_y, p_z, s=50, c="green")
 
     if myc.plot_cur_footprint:
         plot_footprint(my_ax, myc, p_x, p_y, p_z, cur_phi, "green", 0.75)
-    #plot_footprint_hist(my_ax, myc)
+
+    if myc.plot_footprint_hist:
+        plot_footprint_hist(my_ax, myc)
 
     set_axes_equal(my_ax, myc)
 
@@ -267,11 +290,56 @@ def plot_footprint(my_ax, myc, p_x, p_y, p_z, cur_phi, colr="black", alp=0.1):
         colr (str, optional): color of surface. Defaults to "black".
         alp (float, optional): alpha value of surface. Defaults to 0.1.
     """
+    my_ax.scatter(p_x, p_y, 0, s=50, c="green")
+
     delta_h = p_z - 0
     delta_r = delta_h*np.tan(np.radians(myc.hfov_h))
     delta_t = delta_h*np.tan(np.radians(myc.hfov_v))
     delta_m = np.sqrt(delta_r**2+delta_t**2)
-    hfov_d = np.degrees(np.arctan2(delta_h, delta_m))  # why not dm, dh??
+
+    if USE_CASE:
+        hfov_d = np.degrees(np.arctan2(delta_h, delta_m))  # why not dm, dh??
+    else:
+        hfov_d = np.degrees(np.arctan2(delta_m, delta_h))
+
+    if not myc.fix_ang == 0.0:
+        plot_skewed_footprint(my_ax, myc, p_x, p_y, p_z, cur_phi, delta_h,
+                              delta_r, delta_t, delta_m, hfov_d)
+
+    diag_phi_left = np.radians(cur_phi-hfov_d)
+    diag_phi_right = np.radians(cur_phi+hfov_d)
+
+    if USE_CASE:
+        pxs = [p_x + delta_m*np.cos(diag_phi_right),
+               p_x - delta_m*np.cos(diag_phi_left),
+               p_x - delta_m*np.cos(diag_phi_right),
+               p_x + delta_m*np.cos(diag_phi_left)]
+
+        pys = [p_y + delta_m*np.sin(diag_phi_right),
+               p_y - delta_m*np.sin(diag_phi_left),
+               p_y - delta_m*np.sin(diag_phi_right),
+               p_y + delta_m*np.sin(diag_phi_left)]
+
+    else:
+        pxs = [p_x - delta_m*np.sin(diag_phi_left),
+               p_x - delta_m*np.sin(diag_phi_right),
+               p_x + delta_m*np.sin(diag_phi_left),
+               p_x + delta_m*np.sin(diag_phi_right)]
+
+        pys = [p_y + delta_m*np.cos(diag_phi_left),
+               p_y + delta_m*np.cos(diag_phi_right),
+               p_y - delta_m*np.cos(diag_phi_left),
+               p_y - delta_m*np.cos(diag_phi_right)]
+
+    pzs = [0, 0, 0, 0]
+
+    try:
+        my_ax.plot_trisurf(pxs, pys, pzs, color=colr, alpha=alp)
+    except ValueError:
+        print("No distinct points, skipping")
+
+    if PLOT_CORNERS_EDGE:
+        my_ax.scatter(pxs, pys, pzs, s=50, c="cyan")
 
     if PLOT_CORNERS_RADIAL:
         cur_phi_rad = np.radians(cur_phi)
@@ -295,44 +363,65 @@ def plot_footprint(my_ax, myc, p_x, p_y, p_z, cur_phi, colr="black", alp=0.1):
 
         my_ax.scatter(pxs, pys, pzs, s=50, c="cyan")
 
-    diag_phi_left = np.radians(cur_phi-hfov_d)
-    diag_phi_right = np.radians(cur_phi+hfov_d)
 
+def plot_skewed_footprint(my_ax, myc, p_x, p_y, p_z, cur_phi, delta_h, delta_r,
+                          delta_t, delta_m, hfov_d, colr="black", alp=0.25):
+    """[summary]
+
+    Args:
+        my_ax ([type]): [description]
+        myc ([type]): [description]
+        p_x ([type]): [description]
+        p_y ([type]): [description]
+        p_z ([type]): [description]
+        cur_phi ([type]): [description]
+        delta_h ([type]): [description]
+        delta_r ([type]): [description]
+        delta_t ([type]): [description]
+        delta_m ([type]): [description]
+        hfov_d ([type]): [description]
+        colr (str, optional): [description]. Defaults to "black".
+        alp (float, optional): [description]. Defaults to 0.25.
+    """
     if myc.hfov_h+myc.fix_ang < 90.0:
         delta_r_in = delta_h*np.tan(np.radians(myc.hfov_h-myc.fix_ang))
         delta_r_out = delta_h*np.tan(np.radians(myc.hfov_h+myc.fix_ang))
 
-        print(np.array([delta_r, delta_r_in, delta_r_out, np.sqrt(p_x**2+p_y**2), p_z, delta_m, hfov_d]))
+        print(np.array([delta_r, delta_r_in, delta_r_out,
+                        np.sqrt(p_x**2+p_y**2), p_z, delta_m, hfov_d]))
 
-    pxs = [p_x + delta_m*np.cos(diag_phi_right),
-           p_x - delta_m*np.cos(diag_phi_left),
-           p_x - delta_m*np.cos(diag_phi_right),
-           p_x + delta_m*np.cos(diag_phi_left)]
+    p_r_new = np.sqrt(p_x**2+p_y**2) - delta_h*np.tan(myc.fix_ang_rad)
+    p_r_new_in = np.sqrt(p_x**2+p_y**2) - delta_h*np.tan(
+        myc.fix_ang_rad+np.radians(myc.hfov_h))
+    p_r_new_out = np.sqrt(p_x**2+p_y**2) - delta_h*np.tan(
+        myc.fix_ang_rad-np.radians(myc.hfov_h))
 
-    pys = [p_y + delta_m*np.sin(diag_phi_right),
-           p_y - delta_m*np.sin(diag_phi_left),
-           p_y - delta_m*np.sin(diag_phi_right),
-           p_y + delta_m*np.sin(diag_phi_left)]
-    """
-    pxs = [p_x - delta_m*np.sin(diag_phi_left),
-           p_x - delta_m*np.sin(diag_phi_right),
-           p_x + delta_m*np.sin(diag_phi_left),
-           p_x + delta_m*np.sin(diag_phi_right)]
+    cur_phi_rad = np.radians(cur_phi)
+    p_r_new_x = p_r_new*np.cos(cur_phi_rad)
+    p_r_new_y = p_r_new*np.sin(cur_phi_rad)
+    p_r_new_in_x = p_r_new_in*np.cos(cur_phi_rad)
+    p_r_new_in_y = p_r_new_in*np.sin(cur_phi_rad)
+    p_r_new_out_x = p_r_new_out*np.cos(cur_phi_rad)
+    p_r_new_out_y = p_r_new_out*np.sin(cur_phi_rad)
 
-    pys = [p_y + delta_m*np.cos(diag_phi_left),
-           p_y + delta_m*np.cos(diag_phi_right),
-           p_y - delta_m*np.cos(diag_phi_left),
-           p_y - delta_m*np.cos(diag_phi_right)]
-    """
-    pzs = [0, 0, 0, 0]
+    p_t_x_ll = p_r_new_in_x - delta_t*np.sin(cur_phi_rad)
+    p_t_y_ll = p_r_new_in_y + delta_t*np.cos(cur_phi_rad)
 
-    try:
-        my_ax.plot_trisurf(pxs, pys, pzs, color=colr, alpha=alp)
-    except ValueError:
-        print("No distinct points, skipping")
+    p_t_x_ul = p_r_new_out_x - delta_t*np.sin(cur_phi_rad)
+    p_t_y_ul = p_r_new_out_y + delta_t*np.cos(cur_phi_rad)
 
-    if PLOT_CORNERS_EDGE:
-        my_ax.scatter(pxs, pys, pzs, s=50, c="cyan")
+    p_t_x_lr = p_r_new_in_x + delta_t*np.sin(cur_phi_rad)
+    p_t_y_lr = p_r_new_in_y - delta_t*np.cos(cur_phi_rad)
+
+    p_t_x_ur = p_r_new_out_x + delta_t*np.sin(cur_phi_rad)
+    p_t_y_ur = p_r_new_out_y - delta_t*np.cos(cur_phi_rad)
+
+    pxs = [p_r_new_x, p_r_new_in_x, p_r_new_out_x, p_t_x_ll, p_t_x_ul, p_t_x_lr, p_t_x_ur]
+    pys = [p_r_new_y, p_r_new_in_y, p_r_new_out_y, p_t_y_ll, p_t_y_ul, p_t_y_lr, p_t_y_ur]
+    pzs = [0, 0, 0, 0, 0, 0, 0]
+
+    my_ax.scatter(pxs, pys, pzs, s=50, c=colr, alpha=alp)
+    my_ax.plot_trisurf(pxs, pys, pzs, color=colr, alpha=alp)
 
 
 def set_axes_equal(my_ax, myc):
