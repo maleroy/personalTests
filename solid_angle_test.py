@@ -18,6 +18,7 @@ class Crane(object):
         object (Crane): Physical dimensions and visualization parameters
     """
     def __init__(self):
+        # Characteristics from crane itself
         self.tow_x = 0.
         self.tow_y = 0.
         self.tow_z = 0.
@@ -25,9 +26,18 @@ class Crane(object):
         self.tow_h = 43.6  # 60
         self.jib_l = 61.07  # 68
 
+        self.luf_ang = 0
+        self.luf_ang_rad = 0
+
+        # FOV characteristics from camera
         self.hfov_v = 0.5*45.4
         self.hfov_h = 0.5*64.2
 
+        # Fixed angle of luffing bracket for camera
+        self.fix_ang = 30
+        self.fix_ang_rad = np.radians(self.fix_ang)
+
+        # Slices' / Sectors' characteristics
         self.n_sect_2d = 10
         self.i_sect_2d = 360./self.n_sect_2d
         self.n_sect_3d = 4
@@ -42,15 +52,13 @@ class Crane(object):
         self.sect_passed_2d = np.zeros((self.n_sect_2d, 5))
         self.prev_2d_sect = -1
 
+        # Booleans for plot
         self.plot_cur_footprint = True
         self.plot_footprint_hist = False
         self.plot_sect_hist = True
 
-        self.luf_ang = 0
-        self.luf_ang_rad = 0
-
-        self.fix_ang = 30
-        self.fix_ang_rad = np.radians(self.fix_ang)
+        # Building characteristics
+        self.bldg_h = 0
 
     def clear_sect_passed(self):
         """Clears history of which sectors have already been passed through
@@ -66,28 +74,36 @@ def main():
     """
     myc = Crane()
 
+    # Definining list of sectors
     phi_l = np.linspace(0., 360., myc.n_sect_2d+1) - 360./(2*myc.n_sect_2d)
     theta_l = np.linspace(0., 90., myc.n_sect_3d+1)
 
+    # Initial config of camera
     r_s = myc.jib_l
     phi_init = 0  # 60
     theta_init = 90  # 33.75
 
+    # Defining plot area and widgets
     fig = plt.figure(figsize=(6, 6))
     my_ax = fig.add_subplot(111, projection='3d', proj_type='ortho')
 
-    axphi = plt.axes([0.1, 0.15, 0.2, 0.01])
+    axphi = plt.axes([0.1, 0.20, 0.2, 0.01])
     sphi = Slider(axphi, 'Azimuthal angle (phi)', phi_l[0], phi_l[-1],
                   valinit=phi_init, valstep=1, color="blue")
 
-    axtheta = plt.axes([0.1, 0.1, 0.2, 0.01])
+    axtheta = plt.axes([0.1, 0.15, 0.2, 0.01])
     sthet = Slider(axtheta, 'Polar angle (theta)', theta_l[0], theta_l[-1],
                    valinit=theta_init, valstep=1, color="blue")
 
-    axfix = plt.axes([0.1, 0.05, 0.2, 0.01])
+    axfix = plt.axes([0.1, 0.10, 0.2, 0.01])
     sfix = Slider(axfix, 'Cam fixed angle', 0, 80,
                   valinit=myc.fix_ang, valstep=10, color="blue")
 
+    axbldgh = plt.axes([0.1, 0.05, 0.2, 0.01])
+    sbldgh = Slider(axbldgh, 'Building height', myc.tow_z, myc.tow_z+myc.tow_h,
+                    valinit=myc.bldg_h, valstep=10, color="blue")
+
+    # Defining current sector camera is in
     p_a, p_b, p_i = get_interval(phi_l, phi_init)
     phi = np.linspace(p_a, p_b, myc.n_wireframe+1)
 
@@ -96,6 +112,7 @@ def main():
 
     myc.sect_passed[p_i, t_i] = True
 
+    # Getting its coordinates
     msh_phi, msh_theta = np.meshgrid(phi, theta)
     msh_x, msh_y, msh_z = sph2car(r_s, msh_phi, msh_theta)
     p_x, p_y, p_z = sph2car(r_s, phi_init, theta_init)
@@ -115,11 +132,19 @@ def main():
     cam_p = [p_x, p_y, p_z]
     msh_p = [msh_x, msh_y, msh_z]
 
+    # Initial plot of the situation
     plot_all(my_ax, myc, msh_p, cam_p, phi_init)
 
+    # For when a value is changed (either with widget or key presses)
     def update(val):
         my_ax.clear()
 
+        # In case camera's fixed angle or bldg height is changed
+        myc.fix_ang = sfix.val
+        myc.fix_ang_rad = np.radians(sfix.val)
+        myc.bldg_h = sbldgh.val
+
+        # Re-determine current slice / sector and its coordinates
         new_phi = sphi.val
         p_l, p_r, p_i = get_interval(phi_l, new_phi)
         phi = np.linspace(p_l, p_r, myc.n_wireframe+1)
@@ -130,9 +155,6 @@ def main():
 
         myc.luf_ang = 90 - new_theta
         myc.luf_ang_rad = np.radians(90 - new_theta)
-
-        myc.fix_ang = sfix.val
-        myc.fix_ang_rad = np.radians(sfix.val)
 
         myc.sect_passed[p_i, t_i] = True
         if myc.plot_sect_hist:
@@ -157,8 +179,8 @@ def main():
         cam_p = [p_x, p_y, p_z]
         msh_p = [msh_x, msh_y, msh_z]
 
+        # Redraw everything
         plot_all(my_ax, myc, msh_p, cam_p, new_phi)
-
         fig.canvas.draw_idle()
 
     # Initial update now that everything is set up
@@ -166,12 +188,15 @@ def main():
 
     sthet.on_changed(update)
     sphi.on_changed(update)
+    sfix.on_changed(update)
+    sbldgh.on_changed(update)
 
     my_ax.view_init(45, 0)
     set_axes_equal(my_ax, myc)
 
+    # Handles keyboard events
     def press(event):
-        if event.key == 'right':
+        if event.key == 'right':  # Azimuth increase
             if sphi.val == sphi.valmax:
                 n_v = sphi.valmin
             else:
@@ -179,7 +204,7 @@ def main():
                     sphi.valmax if sphi.val+sphi.valstep*5 > sphi.valmax else (
                         sphi.val+sphi.valstep*5))
             sphi.set_val(n_v)
-        elif event.key == 'left':
+        elif event.key == 'left':  # Azimuth decrease
             if sphi.val == sphi.valmin:
                 n_v = sphi.valmax
             else:
@@ -187,39 +212,49 @@ def main():
                     sphi.valmin if sphi.val-sphi.valstep*5 < sphi.valmin else (
                         sphi.val-sphi.valstep*5))
             sphi.set_val(n_v)
-        elif event.key == 'up':
+        elif event.key == 'up':  # Polar angle decrease / Luffing increase
             n_v = (
                 sthet.valmin if sthet.val-sthet.valstep*5 < sthet.valmin else (
                     sthet.val-sthet.valstep*5))
             sthet.set_val(n_v)
-        elif event.key == 'down':
+        elif event.key == 'down':  # Polar angle increase / Luffing decrease
             n_v = (
                 sthet.valmax if sthet.val+sthet.valstep*5 > sthet.valmax else (
                     sthet.val+sthet.valstep*5))
             sthet.set_val(n_v)
-        elif event.key == 'y':
+        elif event.key == 'y':  # Fixed camera bracket angle decrease
             n_v = (
                 sfix.valmin if sfix.val-sfix.valstep < sfix.valmin else (
                     sfix.val-sfix.valstep))
             sfix.set_val(n_v)
-        elif event.key == 'x':
+        elif event.key == 'x':  # Fixed camera bracket angle increase
             n_v = (
                 sfix.valmax if sfix.val+sfix.valstep > sfix.valmax else (
                     sfix.val+sfix.valstep))
             sfix.set_val(n_v)
-        elif event.key == 'c':
+        elif event.key == 'n':  # Building height decrease
+            n_v = (
+                sbldgh.valmin if sbldgh.val-sbldgh.valstep < sbldgh.valmin else (
+                    sbldgh.val-sbldgh.valstep))
+            sbldgh.set_val(n_v)
+        elif event.key == 'm':  # Building height increase
+            n_v = (
+                sbldgh.valmax if sbldgh.val+sbldgh.valstep > sbldgh.valmax else (
+                    sbldgh.val+sbldgh.valstep))
+            sbldgh.set_val(n_v)
+        elif event.key == 'c':  # Clears all sectors' history
             myc.clear_sect_passed()
-        elif event.key == 'h':
+        elif event.key == 'h':  # Hides / Shows current footprint
             myc.plot_cur_footprint = not myc.plot_cur_footprint
-        elif event.key == 'H':
+        elif event.key == 'H':  # Hides / Shows sectors' history
             myc.plot_sect_hist = not myc.plot_sect_hist
-        elif event.key == 'j':
+        elif event.key == 'j':  # Hides / Shows footprints' history
             myc.plot_footprint_hist = not myc.plot_footprint_hist
-        elif event.key == 't':
+        elif event.key == 't':  # Go to top view
             my_ax.view_init(90, 0)
-        elif event.key == 'f':
+        elif event.key == 'f':  # Go to front view
             my_ax.view_init(0, 0)
-        elif event.key == 'o':
+        elif event.key == 'o':  # Go to orthogonal view
             my_ax.view_init(45, 0)
         else:
             pass
@@ -276,24 +311,29 @@ def plot_all(my_ax, myc, msh_p, cam_p, cur_phi):
         msh_p (np.array): current mesh coordinates
         cam_p (float): current point's coordinates
     """
+    # Plots current sector as a wireframe
     if myc.plot_sect_hist:
         my_ax.plot_wireframe(*msh_p, colors="green")
+
+    # Plot crane and camera
+    my_ax.scatter(*cam_p, s=50, c="green")
     my_ax.plot(
         [myc.tow_x, myc.tow_x, cam_p[0]], [myc.tow_y, myc.tow_y, cam_p[1]],
         [myc.tow_z, myc.tow_z+myc.tow_h, cam_p[2]], c="green")
-    my_ax.scatter(*cam_p, s=50, c="green")
-
+    
+    # Plot current footprint
     if myc.plot_cur_footprint:
         plot_footprint(my_ax, myc, cam_p, cur_phi, colr="green", alp=0.3,
                        sc_size=20)
 
+    # Plot footprint history
     if myc.plot_footprint_hist:
         plot_footprint_hist(my_ax, myc)
 
     set_axes_equal(my_ax, myc)
 
 
-def plot_footprint(my_ax, myc, cam_p, cur_phi, luf_ang_rad=None, 
+def plot_footprint(my_ax, myc, cam_p, cur_phi, luf_ang_rad=None,
                    draw_trace=True, colr="black", alp=0.1, sc_size=10):
     """[summary]
 
@@ -311,20 +351,21 @@ def plot_footprint(my_ax, myc, cam_p, cur_phi, luf_ang_rad=None,
     if luf_ang_rad is None:
         luf_ang_rad = myc.luf_ang_rad
 
-    delta_h = cam_p[2] - 0
-    delta_r = delta_h*np.tan(np.radians(myc.hfov_v))
-    delta_t = delta_h*np.tan(np.radians(myc.hfov_h))
+    delta_h = cam_p[2] - myc.bldg_h # Difference between camera z and gnd
+    delta_r = delta_h*np.tan(np.radians(myc.hfov_v))  # Radial difference
+    delta_t = delta_h*np.tan(np.radians(myc.hfov_h))  # Tangential difference
 
-    p_r_old = np.sqrt(cam_p[0]**2+cam_p[1]**2)
+    p_r_old = np.sqrt(cam_p[0]**2+cam_p[1]**2)  # Radial position
 
+    # Radial positions at ground considering luffing angle and bracket angle
     p_r_new = p_r_old - delta_h*np.tan(myc.fix_ang_rad-luf_ang_rad)
     p_r_new_in = p_r_old - delta_h*np.tan(
         myc.fix_ang_rad+np.radians(myc.hfov_v)-luf_ang_rad)
     p_r_new_out = p_r_old - delta_h*np.tan(
         myc.fix_ang_rad-np.radians(myc.hfov_v)-luf_ang_rad)
 
+    # Converting them to cartesian coordinates
     cur_phi_rad = np.radians(cur_phi)
-
     p_r_new_x = p_r_new*np.cos(cur_phi_rad)
     p_r_new_y = p_r_new*np.sin(cur_phi_rad)
     p_r_new_in_x = p_r_new_in*np.cos(cur_phi_rad)
@@ -332,6 +373,7 @@ def plot_footprint(my_ax, myc, cam_p, cur_phi, luf_ang_rad=None,
     p_r_new_out_x = p_r_new_out*np.cos(cur_phi_rad)
     p_r_new_out_y = p_r_new_out*np.sin(cur_phi_rad)
 
+    # Deducing edge corners' positions
     p_t_x_ll = p_r_new_in_x - delta_t*np.sin(cur_phi_rad)
     p_t_y_ll = p_r_new_in_y + delta_t*np.cos(cur_phi_rad)
 
@@ -346,18 +388,20 @@ def plot_footprint(my_ax, myc, cam_p, cur_phi, luf_ang_rad=None,
 
     pxs = [p_r_new_x, p_t_x_ll, p_t_x_ul, p_t_x_lr, p_t_x_ur]
     pys = [p_r_new_y, p_t_y_ll, p_t_y_ul, p_t_y_lr, p_t_y_ur]
-    pzs = [0, 0, 0, 0, 0]
+    pzs = 5*[myc.bldg_h]
 
+    # Draw FOV's pyramid-like shape from camera to footprint
     if draw_trace:
-        my_ax.plot([cam_p[0], p_t_x_ll], [cam_p[1], p_t_y_ll], [cam_p[2], 0],
+        my_ax.plot([cam_p[0], p_t_x_ll], [cam_p[1], p_t_y_ll], [cam_p[2], myc.bldg_h],
                    color=colr, alpha=alp)
-        my_ax.plot([cam_p[0], p_t_x_lr], [cam_p[1], p_t_y_lr], [cam_p[2], 0],
+        my_ax.plot([cam_p[0], p_t_x_lr], [cam_p[1], p_t_y_lr], [cam_p[2], myc.bldg_h],
                    color=colr, alpha=alp)
-        my_ax.plot([cam_p[0], p_t_x_ul], [cam_p[1], p_t_y_ul], [cam_p[2], 0],
+        my_ax.plot([cam_p[0], p_t_x_ul], [cam_p[1], p_t_y_ul], [cam_p[2], myc.bldg_h],
                    color=colr, alpha=alp)
-        my_ax.plot([cam_p[0], p_t_x_ur], [cam_p[1], p_t_y_ur], [cam_p[2], 0],
+        my_ax.plot([cam_p[0], p_t_x_ur], [cam_p[1], p_t_y_ur], [cam_p[2], myc.bldg_h],
                    color=colr, alpha=alp)
 
+    # Draw edges + center point then cover it with a patch
     my_ax.scatter(pxs, pys, pzs, s=sc_size, c=colr, alpha=alp)
     my_ax.plot_trisurf(pxs, pys, pzs, color=colr, alpha=alp)
 
