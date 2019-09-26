@@ -4,8 +4,10 @@ Does an interactive 3D visualization of a point moving in spherical coordinates
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
+import mpl_toolkits.mplot3d.art3d as art3d
 
 from matplotlib.widgets import Slider
+from matplotlib.patches import Rectangle, Circle
 from mpl_toolkits.mplot3d import axes3d
 
 np.set_printoptions(sign='+', precision=2, suppress=True)
@@ -58,7 +60,9 @@ class Crane(object):
         self.plot_sect_hist = True
 
         # Building characteristics
-        self.bldg_h = 0
+        self.bldg_h = 30
+        self.bldg_d = 10
+        self.bldg_w = 20
 
     def clear_sect_passed(self):
         """Clears history of which sectors have already been passed through
@@ -87,21 +91,29 @@ def main():
     fig = plt.figure(figsize=(6, 6))
     my_ax = fig.add_subplot(111, projection='3d', proj_type='ortho')
 
-    axphi = plt.axes([0.1, 0.20, 0.2, 0.01])
+    axphi = plt.axes([0.1, 0.30, 0.2, 0.01])
     sphi = Slider(axphi, 'Azimuthal angle (phi)', phi_l[0], phi_l[-1],
                   valinit=phi_init, valstep=1, color="blue")
 
-    axtheta = plt.axes([0.1, 0.15, 0.2, 0.01])
+    axtheta = plt.axes([0.1, 0.25, 0.2, 0.01])
     sthet = Slider(axtheta, 'Polar angle (theta)', theta_l[0], theta_l[-1],
                    valinit=theta_init, valstep=1, color="blue")
 
-    axfix = plt.axes([0.1, 0.10, 0.2, 0.01])
+    axfix = plt.axes([0.1, 0.20, 0.2, 0.01])
     sfix = Slider(axfix, 'Cam fixed angle', 0, 80,
                   valinit=myc.fix_ang, valstep=10, color="blue")
 
-    axbldgh = plt.axes([0.1, 0.05, 0.2, 0.01])
+    axbldgh = plt.axes([0.1, 0.15, 0.2, 0.01])
     sbldgh = Slider(axbldgh, 'Building height', myc.tow_z, myc.tow_z+myc.tow_h,
                     valinit=myc.bldg_h, valstep=10, color="blue")
+
+    axbldgd = plt.axes([0.1, 0.10, 0.2, 0.01])
+    sbldgd = Slider(axbldgd, 'Building distance', 0, myc.jib_l,
+                    valinit=myc.bldg_d, valstep=5, color="blue")
+
+    axbldgw = plt.axes([0.1, 0.05, 0.2, 0.01])
+    sbldgw = Slider(axbldgw, 'Building width', 0, 2*myc.jib_l,
+                    valinit=myc.bldg_w, valstep=5, color="blue")
 
     # Defining current sector camera is in
     p_a, p_b, p_i = get_interval(phi_l, phi_init)
@@ -143,6 +155,8 @@ def main():
         myc.fix_ang = sfix.val
         myc.fix_ang_rad = np.radians(sfix.val)
         myc.bldg_h = sbldgh.val
+        myc.bldg_d = sbldgd.val
+        myc.bldg_w = sbldgw.val
 
         # Re-determine current slice / sector and its coordinates
         new_phi = sphi.val
@@ -190,6 +204,8 @@ def main():
     sphi.on_changed(update)
     sfix.on_changed(update)
     sbldgh.on_changed(update)
+    sbldgd.on_changed(update)
+    sbldgw.on_changed(update)
 
     my_ax.view_init(45, 0)
     set_axes_equal(my_ax, myc)
@@ -242,6 +258,26 @@ def main():
                 sbldgh.valmax if sbldgh.val+sbldgh.valstep > sbldgh.valmax else (
                     sbldgh.val+sbldgh.valstep))
             sbldgh.set_val(n_v)
+        elif event.key == 'ctrl+n':  # Building distance decrease
+            n_v = (
+                sbldgd.valmin if sbldgd.val-sbldgd.valstep < sbldgd.valmin else (
+                    sbldgd.val-sbldgd.valstep))
+            sbldgd.set_val(n_v)
+        elif event.key == 'ctrl+m':  # Building distance increase
+            n_v = (
+                sbldgd.valmax if sbldgd.val+sbldgd.valstep > sbldgd.valmax else (
+                    sbldgd.val+sbldgd.valstep))
+            sbldgd.set_val(n_v)
+        elif event.key == 'alt+n':  # Building width decrease
+            n_v = (
+                sbldgw.valmin if sbldgw.val-sbldgw.valstep < sbldgw.valmin else (
+                    sbldgw.val-sbldgw.valstep))
+            sbldgw.set_val(n_v)
+        elif event.key == 'alt+m':  # Building width increase
+            n_v = (
+                sbldgw.valmax if sbldgw.val+sbldgw.valstep > sbldgw.valmax else (
+                    sbldgw.val+sbldgw.valstep))
+            sbldgw.set_val(n_v)
         elif event.key == 'c':  # Clears all sectors' history
             myc.clear_sect_passed()
         elif event.key == 'h':  # Hides / Shows current footprint
@@ -257,7 +293,7 @@ def main():
         elif event.key == 'o':  # Go to orthogonal view
             my_ax.view_init(45, 0)
         else:
-            pass
+            print(event.key)
         update(None)
 
     fig.canvas.mpl_connect('key_press_event', press)
@@ -320,7 +356,10 @@ def plot_all(my_ax, myc, msh_p, cam_p, cur_phi):
     my_ax.plot(
         [myc.tow_x, myc.tow_x, cam_p[0]], [myc.tow_y, myc.tow_y, cam_p[1]],
         [myc.tow_z, myc.tow_z+myc.tow_h, cam_p[2]], c="green")
-    
+
+    if not myc.bldg_h < 1:
+        plot_bldg(my_ax, myc)
+
     # Plot current footprint
     if myc.plot_cur_footprint:
         plot_footprint(my_ax, myc, cam_p, cur_phi, colr="green", alp=0.3,
@@ -403,9 +442,40 @@ def plot_footprint(my_ax, myc, cam_p, cur_phi, luf_ang_rad=None,
 
     # Draw edges + center point then cover it with a patch
     my_ax.scatter(pxs, pys, pzs, s=sc_size, c=colr, alpha=alp)
-    my_ax.plot_trisurf(pxs, pys, pzs, color=colr, alpha=alp)
+    my_ax.plot_trisurf(pxs, pys, pzs, color=colr, alpha=alp, shade=False)
 
     return [pxs, pys, pzs]
+
+
+def plot_bldg(my_ax, myc):
+    x_1 = myc.bldg_d
+    x_2 = myc.bldg_d+myc.bldg_w
+    y_1 = myc.bldg_d
+    y_2 = myc.bldg_d+myc.bldg_w
+    z_1 = 0
+    z_2 = myc.bldg_h
+
+    x_a = [x_1, x_2]
+    y_a = [y_1, y_2]
+    z_a = [z_1, z_2]
+
+    x_1, y_1 = np.meshgrid(x_a, y_a)
+    x_2, z_2 = np.meshgrid(x_a, z_a)
+    y_3, z_3 = np.meshgrid(y_a, z_a)
+
+    # Plot the surface.
+    my_ax.plot_surface(x_1, y_1, np.ones(x_1.shape)*z_a[0], color="r",
+                       alpha=0.1, rcount=1, ccount=1, lw=0, antialiased=False)
+    my_ax.plot_surface(x_1, y_1, np.ones(x_1.shape)*z_a[-1], color="r",
+                       alpha=0.1, rcount=1, ccount=1, lw=0, antialiased=False)
+    my_ax.plot_surface(x_2, np.ones(x_2.shape)*y_a[0], z_2, color="r",
+                       alpha=0.1, rcount=1, ccount=1, lw=0, antialiased=False)
+    my_ax.plot_surface(x_2, np.ones(x_2.shape)*y_a[-1], z_2, color="r",
+                       alpha=0.1, rcount=1, ccount=1, lw=0, antialiased=False)
+    my_ax.plot_surface(np.ones(y_3.shape)*x_a[0], y_3, z_3, color="r",
+                       alpha=0.1, rcount=1, ccount=1, lw=0, antialiased=False)
+    my_ax.plot_surface(np.ones(y_3.shape)*x_a[-1], y_3, z_3, color="r",
+                       alpha=0.1, rcount=1, ccount=1, lw=0, antialiased=False)
 
 
 def set_axes_equal(my_ax, myc):
