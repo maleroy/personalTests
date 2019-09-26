@@ -293,34 +293,8 @@ def plot_all(my_ax, myc, msh_p, cam_p, cur_phi):
     set_axes_equal(my_ax, myc)
 
 
-def plot_footprint(my_ax, myc, cam_p, cur_phi, luf_ang_rad=None,
+def plot_footprint(my_ax, myc, cam_p, cur_phi, luf_ang_rad=None, 
                    draw_trace=True, colr="black", alp=0.1, sc_size=10):
-    """Plots a single camera footprint on the ground
-
-    Args:
-        my_ax (plt figure 3D subplot): where results are plotted
-        myc (Crane): instance containing all physical parameters and history
-        cam_p (float): current point's coordinates
-        cur_phi ([type]): [description]
-        colr (str, optional): color of surface. Defaults to "black".
-        alp (float, optional): alpha value of surface. Defaults to 0.1.
-    """
-    if luf_ang_rad is None:
-        luf_ang_rad = myc.luf_ang_rad
-
-    delta_h = cam_p[2] - 0
-    delta_r = delta_h*np.tan(np.radians(myc.hfov_v))
-    delta_t = delta_h*np.tan(np.radians(myc.hfov_h))
-
-    if not myc.fix_ang < 0.0:
-        pxs, pys, pzs = plot_skewed_footprint(my_ax, myc, cam_p, cur_phi,
-                                              luf_ang_rad, draw_trace, delta_h,
-                                              delta_t, colr, alp, sc_size)
-        return pxs, pys, pzs
-
-
-def plot_skewed_footprint(my_ax, myc, cam_p, cur_phi, luf_ang_rad, draw_trace,
-                          delta_h, delta_t, colr="black", alp=0.1, sc_size=10):
     """[summary]
 
     Args:
@@ -334,6 +308,13 @@ def plot_skewed_footprint(my_ax, myc, cam_p, cur_phi, luf_ang_rad, draw_trace,
         colr (str, optional): [description]. Defaults to "black".
         alp (float, optional): [description]. Defaults to 0.25.
     """
+    if luf_ang_rad is None:
+        luf_ang_rad = myc.luf_ang_rad
+
+    delta_h = cam_p[2] - 0
+    delta_r = delta_h*np.tan(np.radians(myc.hfov_v))
+    delta_t = delta_h*np.tan(np.radians(myc.hfov_h))
+
     p_r_old = np.sqrt(cam_p[0]**2+cam_p[1]**2)
 
     p_r_new = p_r_old - delta_h*np.tan(myc.fix_ang_rad-luf_ang_rad)
