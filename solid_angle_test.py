@@ -4,10 +4,8 @@ Does an interactive 3D visualization of a point moving in spherical coordinates
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
-import mpl_toolkits.mplot3d.art3d as art3d
 
 from matplotlib.widgets import Slider
-from matplotlib.patches import Rectangle, Circle
 from mpl_toolkits.mplot3d import axes3d
 
 np.set_printoptions(sign='+', precision=2, suppress=True)
@@ -58,6 +56,7 @@ class Crane(object):
         self.plot_cur_footprint = True
         self.plot_footprint_hist = False
         self.plot_sect_hist = True
+        self.plot_bldg = True
 
         # Building characteristics
         self.bldg_h = 30
@@ -286,6 +285,8 @@ def main():
             myc.plot_sect_hist = not myc.plot_sect_hist
         elif event.key == 'j':  # Hides / Shows footprints' history
             myc.plot_footprint_hist = not myc.plot_footprint_hist
+        elif event.key == 'k':  # Hides / Shows building
+            myc.plot_bldg = not myc.plot_bldg
         elif event.key == 't':  # Go to top view
             my_ax.view_init(90, 0)
         elif event.key == 'f':  # Go to front view
@@ -357,7 +358,7 @@ def plot_all(my_ax, myc, msh_p, cam_p, cur_phi):
         [myc.tow_x, myc.tow_x, cam_p[0]], [myc.tow_y, myc.tow_y, cam_p[1]],
         [myc.tow_z, myc.tow_z+myc.tow_h, cam_p[2]], c="green")
 
-    if not myc.bldg_h < 1:
+    if myc.plot_bldg and not myc.bldg_h < 1 and not myc.bldg_w < 1:
         plot_bldg(my_ax, myc)
 
     # Plot current footprint
@@ -390,7 +391,7 @@ def plot_footprint(my_ax, myc, cam_p, cur_phi, luf_ang_rad=None,
     if luf_ang_rad is None:
         luf_ang_rad = myc.luf_ang_rad
 
-    delta_h = cam_p[2] - myc.bldg_h # Difference between camera z and gnd
+    delta_h = cam_p[2] - myc.bldg_h  # Difference between camera z and gnd
     delta_r = delta_h*np.tan(np.radians(myc.hfov_v))  # Radial difference
     delta_t = delta_h*np.tan(np.radians(myc.hfov_h))  # Tangential difference
 
@@ -448,6 +449,12 @@ def plot_footprint(my_ax, myc, cam_p, cur_phi, luf_ang_rad=None,
 
 
 def plot_bldg(my_ax, myc):
+    """Plots the building next to the crane
+
+    Args:
+        my_ax (plt figure subplot): where sectors should be plotted
+        myc (Crane): instance containing all physical parameters and history
+    """
     x_1 = myc.bldg_d
     x_2 = myc.bldg_d+myc.bldg_w
     y_1 = myc.bldg_d
