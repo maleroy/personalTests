@@ -52,8 +52,8 @@ class Crane(object):
         self.sect_passed = np.zeros(
             (self.n_sect_2d, self.n_sect_3d), dtype=bool)
 
-        self.sect_passed_2d = np.zeros((self.n_sect_2d, 5))
-        self.prev_2d_sect = -1
+        self.sect_passed_2d = np.zeros((self.n_cams, self.n_sect_2d, 5))
+        self.prev_2d_sect = -1*np.ones(3)
 
         # Booleans for plot
         self.plot_cur_footprint = True
@@ -69,10 +69,10 @@ class Crane(object):
     def clear_sect_passed(self):
         """Clears history of which sectors have already been passed through
         """
-        self.sect_passed_2d = np.zeros((self.n_sect_2d, 5))
+        self.sect_passed_2d = np.zeros((self.n_cams, self.n_sect_2d, 5))
         self.sect_passed = np.zeros(
             (self.n_sect_2d, self.n_sect_3d), dtype=bool)
-        self.prev_2d_sect = -1
+        self.prev_2d_sect = -1*np.ones(3)
 
 
 def main():
@@ -109,16 +109,16 @@ def main():
                   valinit=myc.fix_ang[0], valstep=10, color="blue")
 
     axbldgh = plt.axes([0.1, 0.15, 0.2, 0.01])
-    sbldgh = Slider(axbldgh, 'Building height', myc.tow_z, myc.tow_z+myc.tow_h,
-                    valinit=myc.bldg_h, valstep=10, color="blue")
+    sbldh = Slider(axbldgh, 'Building height', myc.tow_z, myc.tow_z+myc.tow_h,
+                   valinit=myc.bldg_h, valstep=10, color="blue")
 
     axbldgd = plt.axes([0.1, 0.10, 0.2, 0.01])
-    sbldgd = Slider(axbldgd, 'Building distance', 0, myc.jib_l,
-                    valinit=myc.bldg_d, valstep=5, color="blue")
+    sbldd = Slider(axbldgd, 'Building distance', 0, myc.jib_l,
+                   valinit=myc.bldg_d, valstep=5, color="blue")
 
     axbldgw = plt.axes([0.1, 0.05, 0.2, 0.01])
-    sbldgw = Slider(axbldgw, 'Building width', 0, 2*myc.jib_l,
-                    valinit=myc.bldg_w, valstep=5, color="blue")
+    sbldw = Slider(axbldgw, 'Building width', 0, 2*myc.jib_l,
+                   valinit=myc.bldg_w, valstep=5, color="blue")
 
     # Defining current sector camera is in
     p_a, p_b, p_i = get_interval(phi_l, phi_init)
@@ -149,9 +149,10 @@ def main():
     for i in range(myc.n_cams):
         p_x, p_y, p_z = sph2car(myc.k_cams[i]*r_s, phi_init, theta_init)
 
-        if not p_i == myc.prev_2d_sect:
-            myc.sect_passed_2d[p_i] = [p_x, p_y, p_z, phi_init, myc.luf_ang_rad]
-            myc.prev_2d_sect = p_i
+        if not p_i == myc.prev_2d_sect[i]:
+            myc.sect_passed_2d[i][p_i] = [p_x, p_y, p_z, phi_init,
+                                          myc.luf_ang_rad]
+            myc.prev_2d_sect[i] = p_i
         p_x += myc.tow_x
         p_y += myc.tow_y
         p_z += myc.tow_z + myc.tow_h
@@ -168,10 +169,10 @@ def main():
         # In case camera's fixed angle or bldg height is changed
         myc.fix_ang[myc.cur_cam] = sfix.val
         myc.fix_ang_rad[myc.cur_cam] = np.radians(sfix.val)
-        print(myc.fix_ang)
-        myc.bldg_h = sbldgh.val
-        myc.bldg_d = sbldgd.val
-        myc.bldg_w = sbldgw.val
+
+        myc.bldg_h = sbldh.val
+        myc.bldg_d = sbldd.val
+        myc.bldg_w = sbldw.val
 
         # Re-determine current slice / sector and its coordinates
         new_phi = sphi.val
@@ -208,9 +209,10 @@ def main():
         for i in range(myc.n_cams):
             p_x, p_y, p_z = sph2car(myc.k_cams[i]*r_s, new_phi, new_theta)
 
-            if not p_i == myc.prev_2d_sect:
-                myc.sect_passed_2d[p_i] = [p_x, p_y, p_z, new_phi, myc.luf_ang_rad]
-                myc.prev_2d_sect = p_i
+            if not p_i == myc.prev_2d_sect[i]:
+                myc.sect_passed_2d[i][p_i] = [p_x, p_y, p_z, new_phi,
+                                              myc.luf_ang_rad]
+                myc.prev_2d_sect[i] = p_i
 
             p_x += myc.tow_x
             p_y += myc.tow_y
@@ -228,9 +230,9 @@ def main():
     sphi.on_changed(update)
     sthet.on_changed(update)
     sfix.on_changed(update)
-    sbldgh.on_changed(update)
-    sbldgd.on_changed(update)
-    sbldgw.on_changed(update)
+    sbldh.on_changed(update)
+    sbldd.on_changed(update)
+    sbldw.on_changed(update)
     rcams.on_clicked(update)
 
     my_ax.view_init(45, 0)
@@ -279,36 +281,36 @@ def main():
 
         elif event.key == 'n':  # Building height decrease
             n_v = (
-                sbldgh.valmin if sbldgh.val-sbldgh.valstep < sbldgh.valmin else (
-                    sbldgh.val-sbldgh.valstep))
-            sbldgh.set_val(n_v)
+                sbldh.valmin if sbldh.val-sbldh.valstep < sbldh.valmin else (
+                    sbldh.val-sbldh.valstep))
+            sbldh.set_val(n_v)
         elif event.key == 'm':  # Building height increase
             n_v = (
-                sbldgh.valmax if sbldgh.val+sbldgh.valstep > sbldgh.valmax else (
-                    sbldgh.val+sbldgh.valstep))
-            sbldgh.set_val(n_v)
+                sbldh.valmax if sbldh.val+sbldh.valstep > sbldh.valmax else (
+                    sbldh.val+sbldh.valstep))
+            sbldh.set_val(n_v)
 
         elif event.key == 'ctrl+n':  # Building distance decrease
             n_v = (
-                sbldgd.valmin if sbldgd.val-sbldgd.valstep < sbldgd.valmin else (
-                    sbldgd.val-sbldgd.valstep))
-            sbldgd.set_val(n_v)
+                sbldd.valmin if sbldd.val-sbldd.valstep < sbldd.valmin else (
+                    sbldd.val-sbldd.valstep))
+            sbldd.set_val(n_v)
         elif event.key == 'ctrl+m':  # Building distance increase
             n_v = (
-                sbldgd.valmax if sbldgd.val+sbldgd.valstep > sbldgd.valmax else (
-                    sbldgd.val+sbldgd.valstep))
-            sbldgd.set_val(n_v)
+                sbldd.valmax if sbldd.val+sbldd.valstep > sbldd.valmax else (
+                    sbldd.val+sbldd.valstep))
+            sbldd.set_val(n_v)
 
         elif event.key == 'alt+n':  # Building width decrease
             n_v = (
-                sbldgw.valmin if sbldgw.val-sbldgw.valstep < sbldgw.valmin else (
-                    sbldgw.val-sbldgw.valstep))
-            sbldgw.set_val(n_v)
+                sbldw.valmin if sbldw.val-sbldw.valstep < sbldw.valmin else (
+                    sbldw.val-sbldw.valstep))
+            sbldw.set_val(n_v)
         elif event.key == 'alt+m':  # Building width increase
             n_v = (
-                sbldgw.valmax if sbldgw.val+sbldgw.valstep > sbldgw.valmax else (
-                    sbldgw.val+sbldgw.valstep))
-            sbldgw.set_val(n_v)
+                sbldw.valmax if sbldw.val+sbldw.valstep > sbldw.valmax else (
+                    sbldw.val+sbldw.valstep))
+            sbldw.set_val(n_v)
 
         elif event.key == 'c':  # Clears all sectors' history
             myc.clear_sect_passed()
@@ -412,12 +414,12 @@ def plot_all(my_ax, myc, msh_p, cam_p, jt_p, cur_phi):
         plot_bldg(my_ax, myc)
 
     # Plot crane and camera
-    for i in range(len(cam_p)):
-        my_ax.scatter(*cam_p[i], s=50, c="green")
-        
+    for i, item in enumerate(cam_p):
+        my_ax.scatter(*item, s=50, c="green")
+
         # Plot current footprint
         if myc.plot_cur_footprint:
-            plot_footprint(my_ax, myc, cam_p[i], cur_phi, myc.fix_ang_rad[i],
+            plot_footprint(my_ax, myc, item, cur_phi, myc.fix_ang_rad[i],
                            colr="g", alp=0.3, sc_size=20)
 
     # Plot footprint history
@@ -486,13 +488,21 @@ def plot_footprint(my_ax, myc, cam_p, cur_phi, fix_ang_rad, luf_ang_rad=None,
 
     # Draw FOV's pyramid-like shape from camera to footprint
     if draw_trace:
-        my_ax.plot([cam_p[0], p_t_x_ll], [cam_p[1], p_t_y_ll], [cam_p[2], myc.bldg_h],
+        my_ax.plot([cam_p[0], p_t_x_ll],
+                   [cam_p[1], p_t_y_ll],
+                   [cam_p[2], myc.bldg_h],
                    color=colr, alpha=alp)
-        my_ax.plot([cam_p[0], p_t_x_lr], [cam_p[1], p_t_y_lr], [cam_p[2], myc.bldg_h],
+        my_ax.plot([cam_p[0], p_t_x_lr],
+                   [cam_p[1], p_t_y_lr],
+                   [cam_p[2], myc.bldg_h],
                    color=colr, alpha=alp)
-        my_ax.plot([cam_p[0], p_t_x_ul], [cam_p[1], p_t_y_ul], [cam_p[2], myc.bldg_h],
+        my_ax.plot([cam_p[0], p_t_x_ul],
+                   [cam_p[1], p_t_y_ul],
+                   [cam_p[2], myc.bldg_h],
                    color=colr, alpha=alp)
-        my_ax.plot([cam_p[0], p_t_x_ur], [cam_p[1], p_t_y_ur], [cam_p[2], myc.bldg_h],
+        my_ax.plot([cam_p[0], p_t_x_ur],
+                   [cam_p[1], p_t_y_ur],
+                   [cam_p[2], myc.bldg_h],
                    color=colr, alpha=alp)
 
     # Draw edges + center point then cover it with a patch
@@ -615,25 +625,21 @@ def plot_footprint_hist(my_ax, myc):
         my_ax (plt figure subplot): where sectors should be plotted
         myc (Crane): instance containing all physical parameters and history
     """
-    x_arr = []
-    y_arr = []
-    z_arr = []
+    for i in range(myc.n_cams):
+        for j in range(myc.sect_passed_2d.shape[1]):
+            if myc.sect_passed_2d[i][j].any():
+                cam_pft = [myc.sect_passed_2d[i, j, 0] + myc.tow_x,
+                           myc.sect_passed_2d[i, j, 1] + myc.tow_y,
+                           myc.sect_passed_2d[i, j, 2] + myc.tow_z + myc.tow_h]
 
-    for i in range(myc.sect_passed_2d.shape[0]):
-        if myc.sect_passed_2d[i].any():
-            cam_p_ftprnt = [myc.sect_passed_2d[i, 0] + myc.tow_x,
-                            myc.sect_passed_2d[i, 1] + myc.tow_y,
-                            myc.sect_passed_2d[i, 2] + myc.tow_z + myc.tow_h]
+                plot_footprint(my_ax,
+                               myc,
+                               cam_pft,
+                               myc.sect_passed_2d[i, j, 3],
+                               myc.fix_ang_rad[i],
+                               myc.sect_passed_2d[i, j, 4],
+                               False)
 
-            for i in range(myc.n_cams):
-                pxs, pys, pzs = plot_footprint(my_ax,
-                                               myc,
-                                               cam_p_ftprnt,
-                                               myc.sect_passed_2d[i, 3],
-                                               myc.fix_ang_rad[i],
-                                               myc.sect_passed_2d[i, 4],
-                                               False)
-            
 
 if __name__ == '__main__':
     main()
