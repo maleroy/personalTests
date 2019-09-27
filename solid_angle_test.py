@@ -34,8 +34,8 @@ class Crane(object):
         self.hfov_h = 0.5*64.2
 
         # Fixed angle of luffing bracket for camera
-        self.n_cams = 3
-        self.k_cams = np.linspace(0.1, 0.9, 3)
+        self.n_cams = 4
+        self.k_cams = np.linspace(0.1, 0.9, self.n_cams)
         self.fix_ang = 30*np.ones(self.n_cams)
         self.fix_ang_rad = np.radians(self.fix_ang)
         self.cur_cam = 0
@@ -53,7 +53,7 @@ class Crane(object):
             (self.n_sect_2d, self.n_sect_3d), dtype=bool)
 
         self.sect_passed_2d = np.zeros((self.n_cams, self.n_sect_2d, 5))
-        self.prev_2d_sect = -1*np.ones(3)
+        self.prev_2d_sect = -1*np.ones(self.n_cams)
 
         # Booleans for plot
         self.plot_cur_footprint = True
@@ -72,7 +72,7 @@ class Crane(object):
         self.sect_passed_2d = np.zeros((self.n_cams, self.n_sect_2d, 5))
         self.sect_passed = np.zeros(
             (self.n_sect_2d, self.n_sect_3d), dtype=bool)
-        self.prev_2d_sect = -1*np.ones(3)
+        self.prev_2d_sect = -1*np.ones(self.n_cams)
 
 
 def main():
@@ -89,36 +89,46 @@ def main():
     phi_init = 90  # 60
     theta_init = 90  # 33.75
 
+    s_l = 0.15
+    s_w = 0.15
+    s_h = 0.01
+
     # Defining plot area and widgets
     fig = plt.figure(figsize=(6, 6))
     my_ax = fig.add_subplot(111, projection='3d', proj_type='ortho')
 
-    axradio = plt.axes([0.1, 0.35, 0.2, 0.1])
-    rcams = RadioButtons(axradio, ('0', '1', '2'), 0)
+    scol = "blue"
+    salp = 0.2
 
-    axphi = plt.axes([0.1, 0.30, 0.2, 0.01])
+    axradio = plt.axes([s_l, 0.35, s_w, 10*s_h])
+    rcams = RadioButtons(
+        axradio, tuple(
+            ['Cam '+str(x+1)+' selected' for x in range(myc.n_cams)]), 0,
+        activecolor='green')
+
+    axphi = plt.axes([s_l, 0.30, s_w, s_h])
     sphi = Slider(axphi, 'Azimuthal angle (phi)', phi_l[0], phi_l[-1],
-                  valinit=phi_init, valstep=1, color="blue")
+                  valinit=phi_init, valstep=1, color=scol, alpha=salp)
 
-    axtheta = plt.axes([0.1, 0.25, 0.2, 0.01])
+    axtheta = plt.axes([s_l, 0.25, s_w, s_h])
     sthet = Slider(axtheta, 'Polar angle (theta)', theta_l[0], theta_l[-1],
-                   valinit=theta_init, valstep=1, color="blue")
+                   valinit=theta_init, valstep=1, color=scol, alpha=salp)
 
-    axfix = plt.axes([0.1, 0.20, 0.2, 0.01])
-    sfix = Slider(axfix, 'Cam fixed angle', 0, 80,
-                  valinit=myc.fix_ang[0], valstep=10, color="blue")
+    axfix = plt.axes([s_l, 0.20, s_w, s_h])
+    sfix = Slider(axfix, 'Selected cam\'s bracket angle', 0, 80,
+                  valinit=myc.fix_ang[0], valstep=10, color=scol, alpha=salp)
 
-    axbldgh = plt.axes([0.1, 0.15, 0.2, 0.01])
+    axbldgh = plt.axes([s_l, 0.15, s_w, s_h])
     sbldh = Slider(axbldgh, 'Building height', myc.tow_z, myc.tow_z+myc.tow_h,
-                   valinit=myc.bldg_h, valstep=10, color="blue")
+                   valinit=myc.bldg_h, valstep=10, color=scol, alpha=salp)
 
-    axbldgd = plt.axes([0.1, 0.10, 0.2, 0.01])
+    axbldgd = plt.axes([s_l, 0.10, s_w, s_h])
     sbldd = Slider(axbldgd, 'Building distance', 0, myc.jib_l,
-                   valinit=myc.bldg_d, valstep=5, color="blue")
+                   valinit=myc.bldg_d, valstep=5, color=scol, alpha=salp)
 
-    axbldgw = plt.axes([0.1, 0.05, 0.2, 0.01])
+    axbldgw = plt.axes([s_l, 0.05, s_w, s_h])
     sbldw = Slider(axbldgw, 'Building width', 0, 2*myc.jib_l,
-                   valinit=myc.bldg_w, valstep=5, color="blue")
+                   valinit=myc.bldg_w, valstep=5, color=scol, alpha=salp)
 
     # Defining current sector camera is in
     p_a, p_b, p_i = get_interval(phi_l, phi_init)
@@ -240,94 +250,61 @@ def main():
 
     # Handles keyboard events
     def press(event):
+        """Handles keyboard events
+
+        Args:
+            event (key_press_event): key that was pressed
+        """
         if event.key == 'right':  # Azimuth increase
+            k_mul = 5
             if sphi.val == sphi.valmax:
-                n_v = sphi.valmin
+                sphi.set_val(sphi.valmin+sphi.valstep*k_mul)
             else:
-                n_v = (
-                    sphi.valmax if sphi.val+sphi.valstep*5 > sphi.valmax else (
-                        sphi.val+sphi.valstep*5))
-            sphi.set_val(n_v)
+                check_slider_min_max(sphi, mul=k_mul)
         elif event.key == 'left':  # Azimuth decrease
+            k_mul = 5
             if sphi.val == sphi.valmin:
-                n_v = sphi.valmax
+                sphi.set_val(sphi.valmax-sphi.valstep*k_mul)
             else:
-                n_v = (
-                    sphi.valmin if sphi.val-sphi.valstep*5 < sphi.valmin else (
-                        sphi.val-sphi.valstep*5))
-            sphi.set_val(n_v)
+                check_slider_min_max(sphi, '-', k_mul)
 
         elif event.key == 'up':  # Polar angle decrease / Luffing increase
-            n_v = (
-                sthet.valmin if sthet.val-sthet.valstep*5 < sthet.valmin else (
-                    sthet.val-sthet.valstep*5))
-            sthet.set_val(n_v)
+            check_slider_min_max(sthet, '-', 5)
         elif event.key == 'down':  # Polar angle increase / Luffing decrease
-            n_v = (
-                sthet.valmax if sthet.val+sthet.valstep*5 > sthet.valmax else (
-                    sthet.val+sthet.valstep*5))
-            sthet.set_val(n_v)
+            check_slider_min_max(sthet, mul=5)
 
         elif event.key == 'y':  # Fixed camera bracket angle decrease
-            n_v = (
-                sfix.valmin if sfix.val-sfix.valstep < sfix.valmin else (
-                    sfix.val-sfix.valstep))
-            sfix.set_val(n_v)
+            check_slider_min_max(sfix, '-')
         elif event.key == 'x':  # Fixed camera bracket angle increase
-            n_v = (
-                sfix.valmax if sfix.val+sfix.valstep > sfix.valmax else (
-                    sfix.val+sfix.valstep))
-            sfix.set_val(n_v)
+            check_slider_min_max(sfix)
 
         elif event.key == 'n':  # Building height decrease
-            n_v = (
-                sbldh.valmin if sbldh.val-sbldh.valstep < sbldh.valmin else (
-                    sbldh.val-sbldh.valstep))
-            sbldh.set_val(n_v)
+            check_slider_min_max(sbldh, '-')
         elif event.key == 'm':  # Building height increase
-            n_v = (
-                sbldh.valmax if sbldh.val+sbldh.valstep > sbldh.valmax else (
-                    sbldh.val+sbldh.valstep))
-            sbldh.set_val(n_v)
+            check_slider_min_max(sbldh)
 
         elif event.key == 'ctrl+n':  # Building distance decrease
-            n_v = (
-                sbldd.valmin if sbldd.val-sbldd.valstep < sbldd.valmin else (
-                    sbldd.val-sbldd.valstep))
-            sbldd.set_val(n_v)
+            check_slider_min_max(sbldd, '-')
         elif event.key == 'ctrl+m':  # Building distance increase
-            n_v = (
-                sbldd.valmax if sbldd.val+sbldd.valstep > sbldd.valmax else (
-                    sbldd.val+sbldd.valstep))
-            sbldd.set_val(n_v)
+            check_slider_min_max(sbldd)
 
         elif event.key == 'alt+n':  # Building width decrease
-            n_v = (
-                sbldw.valmin if sbldw.val-sbldw.valstep < sbldw.valmin else (
-                    sbldw.val-sbldw.valstep))
-            sbldw.set_val(n_v)
+            check_slider_min_max(sbldw, '-')
         elif event.key == 'alt+m':  # Building width increase
-            n_v = (
-                sbldw.valmax if sbldw.val+sbldw.valstep > sbldw.valmax else (
-                    sbldw.val+sbldw.valstep))
-            sbldw.set_val(n_v)
+            check_slider_min_max(sbldw)
 
         elif event.key == 'c':  # Clears all sectors' history
             myc.clear_sect_passed()
             update(None)
 
         elif event.key == 'h':  # Hides / Shows current footprint
-            myc.plot_cur_footprint = not myc.plot_cur_footprint
-            update(None)
+            hide_show_plot(myc, "myc.plot_cur_footprint")
         elif event.key == 'H':  # Hides / Shows sectors' history
-            myc.plot_sect_hist = not myc.plot_sect_hist
-            update(None)
+            hide_show_plot(myc, "myc.plot_sect_hist")
         elif event.key == 'j':  # Hides / Shows footprints' history
-            myc.plot_footprint_hist = not myc.plot_footprint_hist
-            update(None)
+            hide_show_plot(myc, "myc.plot_footprint_hist")
         elif event.key == 'k':  # Hides / Shows building
-            myc.plot_bldg = not myc.plot_bldg
-            update(None)
+            hide_show_plot(myc, "myc.plot_bldg")
 
         elif event.key == 't':  # Go to top view
             my_ax.view_init(90, 0)
@@ -336,21 +313,42 @@ def main():
         elif event.key == 'o':  # Go to orthogonal view
             my_ax.view_init(45, 0)
 
-        elif event.key == '0':  # Change current cam (for sliders)
-            myc.cur_cam = 0
-            sfix.set_val(myc.fix_ang[myc.cur_cam])
-            rcams.set_active(myc.cur_cam)
-        elif event.key == '1':  # Change current cam (for sliders)
-            myc.cur_cam = 1
-            sfix.set_val(myc.fix_ang[myc.cur_cam])
-            rcams.set_active(myc.cur_cam)
-        elif event.key == '2':  # Change current cam (for sliders)
-            myc.cur_cam = 2
+        # Change current cam (for sliders) with keyboard numbers 1 to 9
+        elif ord(event.key) > 48 and ord(event.key) < 58:
+            myc.cur_cam = myc.n_cams-1 if int(
+                event.key) % myc.n_cams == 0 else(
+                    int(event.key) % myc.n_cams - 1)
             sfix.set_val(myc.fix_ang[myc.cur_cam])
             rcams.set_active(myc.cur_cam)
 
         else:
             print(event.key)
+
+    def check_slider_min_max(sli, sign='+', mul=1):
+        """Updates slider values while checking if min / max has been reached
+
+        Args:
+            sli (matplotlib widget): slider to be modified
+            sign (str, optional): increase / decrease logic. Defaults to '+'.
+            mul (int, optional): valstep multiplication factor. Defaults to 1.
+        """
+        if sign == '+':
+            n_v = (sli.valmax if sli.val+sli.valstep*mul > sli.valmax else (
+                sli.val+sli.valstep*mul))
+        else:
+            n_v = (sli.valmin if sli.val-sli.valstep*mul < sli.valmin else (
+                sli.val-sli.valstep*mul))
+        sli.set_val(n_v)
+
+    def hide_show_plot(myc, plot_bool):
+        """Executes a boolean change in a parameter of a class object
+
+        Args:
+            myc (class object): object whose argument must be changed
+            plot_bool (string): argument
+        """
+        exec(plot_bool + " = not " + plot_bool)
+        update(None)
 
     fig.canvas.mpl_connect('key_press_event', press)
 
@@ -409,11 +407,11 @@ def plot_all(my_ax, myc, msh_p, cam_p, jt_p, cur_phi):
 
     my_ax.plot(
         [myc.tow_x, myc.tow_x, jt_p[0]], [myc.tow_y, myc.tow_y, jt_p[1]],
-        [myc.tow_z, myc.tow_z+myc.tow_h, jt_p[2]], c="green")
+        [myc.tow_z, myc.tow_z+myc.tow_h, jt_p[2]], c="orange")
     if myc.plot_bldg and not myc.bldg_h < 1 and not myc.bldg_w < 1:
         plot_bldg(my_ax, myc)
 
-    # Plot crane and camera
+    # Plot cameras
     for i, item in enumerate(cam_p):
         my_ax.scatter(*item, s=50, c="green")
 
@@ -421,6 +419,7 @@ def plot_all(my_ax, myc, msh_p, cam_p, jt_p, cur_phi):
         if myc.plot_cur_footprint:
             plot_footprint(my_ax, myc, item, cur_phi, myc.fix_ang_rad[i],
                            colr="g", alp=0.3, sc_size=20)
+    print()
 
     # Plot footprint history
     if myc.plot_footprint_hist:
@@ -448,7 +447,7 @@ def plot_footprint(my_ax, myc, cam_p, cur_phi, fix_ang_rad, luf_ang_rad=None,
         luf_ang_rad = myc.luf_ang_rad
 
     delta_h = cam_p[2] - myc.bldg_h  # Difference between camera z and gnd
-    delta_r = delta_h*np.tan(np.radians(myc.hfov_v))  # Radial difference
+    # delta_r = delta_h*np.tan(np.radians(myc.hfov_v))  # Radial difference
     delta_t = delta_h*np.tan(np.radians(myc.hfov_h))  # Tangential difference
 
     p_r_old = np.sqrt(cam_p[0]**2+cam_p[1]**2)  # Radial position
@@ -482,8 +481,8 @@ def plot_footprint(my_ax, myc, cam_p, cur_phi, fix_ang_rad, luf_ang_rad=None,
     p_t_x_ur = p_r_new_out_x + delta_t*np.sin(cur_phi_rad)
     p_t_y_ur = p_r_new_out_y - delta_t*np.cos(cur_phi_rad)
 
-    pxs = [p_r_new_x, p_t_x_ll, p_t_x_ul, p_t_x_lr, p_t_x_ur]
-    pys = [p_r_new_y, p_t_y_ll, p_t_y_ul, p_t_y_lr, p_t_y_ur]
+    pxs = [p_r_new_x, p_t_x_ll, p_t_x_ul, p_t_x_ur, p_t_x_lr]
+    pys = [p_r_new_y, p_t_y_ll, p_t_y_ul, p_t_y_ur, p_t_y_lr]
     pzs = 5*[myc.bldg_h]
 
     # Draw FOV's pyramid-like shape from camera to footprint
@@ -509,7 +508,19 @@ def plot_footprint(my_ax, myc, cam_p, cur_phi, fix_ang_rad, luf_ang_rad=None,
     my_ax.scatter(pxs, pys, pzs, s=sc_size, c=colr, alpha=alp)
     my_ax.plot_trisurf(pxs, pys, pzs, color=colr, alpha=alp, shade=False)
 
-    return [pxs, pys, pzs]
+    print("{:.1f}[m^2]".format(
+        get_polygon_area(np.array(pxs[1:]), np.array(pys[1:]), 4)))
+
+
+def get_polygon_area(x_s, y_s, n_points):
+    area = 0.0
+    idx = n_points-1
+
+    for i in range(n_points):
+        area += (x_s[idx]+x_s[i])*(y_s[idx]-y_s[i])
+        idx = i
+
+    return np.abs(0.5*area)
 
 
 def plot_bldg(my_ax, myc):
@@ -534,57 +545,18 @@ def plot_bldg(my_ax, myc):
     x_2, z_2 = np.meshgrid(x_a, z_a)
     y_3, z_3 = np.meshgrid(y_a, z_a)
 
+    s_1 = [x_1, y_1, np.ones(x_1.shape)*z_a[0]]
+    s_2 = [x_1, y_1, np.ones(x_1.shape)*z_a[-1]]
+    s_3 = [x_2, np.ones(x_2.shape)*y_a[0], z_2]
+    s_4 = [x_2, np.ones(x_2.shape)*y_a[-1], z_2]
+    s_5 = [np.ones(y_3.shape)*x_a[0], y_3, z_3]
+    s_6 = [np.ones(y_3.shape)*x_a[-1], y_3, z_3]
+    s_s = [s_1, s_2, s_3, s_4, s_5, s_6]
+
     # Plot the surface.
-    my_ax.plot_surface(x_1, y_1, np.ones(x_1.shape)*z_a[0], color="r",
-                       alpha=0.1, rcount=1, ccount=1, lw=0, antialiased=False)
-    my_ax.plot_surface(x_1, y_1, np.ones(x_1.shape)*z_a[-1], color="r",
-                       alpha=0.1, rcount=1, ccount=1, lw=0, antialiased=False)
-    my_ax.plot_surface(x_2, np.ones(x_2.shape)*y_a[0], z_2, color="r",
-                       alpha=0.1, rcount=1, ccount=1, lw=0, antialiased=False)
-    my_ax.plot_surface(x_2, np.ones(x_2.shape)*y_a[-1], z_2, color="r",
-                       alpha=0.1, rcount=1, ccount=1, lw=0, antialiased=False)
-    my_ax.plot_surface(np.ones(y_3.shape)*x_a[0], y_3, z_3, color="r",
-                       alpha=0.1, rcount=1, ccount=1, lw=0, antialiased=False)
-    my_ax.plot_surface(np.ones(y_3.shape)*x_a[-1], y_3, z_3, color="r",
-                       alpha=0.1, rcount=1, ccount=1, lw=0, antialiased=False)
-
-
-def set_axes_equal(my_ax, myc):
-    """Make axes of 3D plot have equal scale so that spheres appear as spheres,
-    cubes as cubes, etc..  This is one possible solution to Matplotlib's
-    my_ax.set_aspect('equal') and my_ax.axis('equal') not working for 3D.
-
-    Args
-        my_ax (plt figure subplot): where sectors should be plotted
-        myc (Crane): instance containing all physical parameters and history
-    """
-    my_ax.set_xlabel('X axis')
-    my_ax.set_ylabel('Y axis')
-    my_ax.set_zlabel('Z axis')
-    b_b = 1.5*myc.jib_l
-    my_ax.set_xlim3d([myc.tow_x-b_b, myc.tow_x+b_b])
-    my_ax.set_ylim3d([myc.tow_y-b_b, myc.tow_y+b_b])
-    my_ax.set_zlim3d([myc.tow_z, myc.tow_z+myc.tow_h+b_b])
-    my_ax.set_aspect('equal')
-
-    x_limits = my_ax.get_xlim3d()
-    y_limits = my_ax.get_ylim3d()
-    z_limits = my_ax.get_zlim3d()
-
-    x_range = abs(x_limits[1] - x_limits[0])
-    x_middle = np.mean(x_limits)
-    y_range = abs(y_limits[1] - y_limits[0])
-    y_middle = np.mean(y_limits)
-    z_range = abs(z_limits[1] - z_limits[0])
-    z_middle = np.mean(z_limits)
-
-    # The plot bounding box is a sphere in the sense of the infinity
-    # norm, hence I call half the max range the plot radius.
-    plot_radius = 0.5*max([x_range, y_range, z_range])
-
-    my_ax.set_xlim3d([x_middle - plot_radius, x_middle + plot_radius])
-    my_ax.set_ylim3d([y_middle - plot_radius, y_middle + plot_radius])
-    my_ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
+    for item in s_s:
+        my_ax.plot_surface(*item, color="b", alpha=0.1, rcount=1, ccount=1,
+                           lw=0, antialiased=False)
 
 
 def plot_sect_hist(my_ax, myc):
@@ -639,6 +611,45 @@ def plot_footprint_hist(my_ax, myc):
                                myc.fix_ang_rad[i],
                                myc.sect_passed_2d[i, j, 4],
                                False)
+    print()
+
+
+def set_axes_equal(my_ax, myc):
+    """Make axes of 3D plot have equal scale so that spheres appear as spheres,
+    cubes as cubes, etc..  This is one possible solution to Matplotlib's
+    my_ax.set_aspect('equal') and my_ax.axis('equal') not working for 3D.
+
+    Args
+        my_ax (plt figure subplot): where sectors should be plotted
+        myc (Crane): instance containing all physical parameters and history
+    """
+    my_ax.set_xlabel('X axis')
+    my_ax.set_ylabel('Y axis')
+    my_ax.set_zlabel('Z axis')
+    b_b = 1.5*myc.jib_l
+    my_ax.set_xlim3d([myc.tow_x-b_b, myc.tow_x+b_b])
+    my_ax.set_ylim3d([myc.tow_y-b_b, myc.tow_y+b_b])
+    my_ax.set_zlim3d([myc.tow_z, myc.tow_z+myc.tow_h+b_b])
+    my_ax.set_aspect('equal')
+
+    x_limits = my_ax.get_xlim3d()
+    y_limits = my_ax.get_ylim3d()
+    z_limits = my_ax.get_zlim3d()
+
+    x_range = abs(x_limits[1] - x_limits[0])
+    x_middle = np.mean(x_limits)
+    y_range = abs(y_limits[1] - y_limits[0])
+    y_middle = np.mean(y_limits)
+    z_range = abs(z_limits[1] - z_limits[0])
+    z_middle = np.mean(z_limits)
+
+    # The plot bounding box is a sphere in the sense of the infinity
+    # norm, hence I call half the max range the plot radius.
+    plot_radius = 0.5*max([x_range, y_range, z_range])
+
+    my_ax.set_xlim3d([x_middle - plot_radius, x_middle + plot_radius])
+    my_ax.set_ylim3d([y_middle - plot_radius, y_middle + plot_radius])
+    my_ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
 
 
 if __name__ == '__main__':
