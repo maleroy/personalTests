@@ -1,7 +1,5 @@
 import os
 import sys
-from PIL import Image
-from PIL.ExifTags import TAGS
 import piexif
 
 KEY_MEANINGS = {}

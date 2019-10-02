@@ -308,10 +308,13 @@ def main():
 
         elif event.key == 't':  # Go to top view
             my_ax.view_init(90, 0)
+            update(None)
         elif event.key == 'f':  # Go to front view
             my_ax.view_init(0, 0)
+            update(None)
         elif event.key == 'o':  # Go to orthogonal view
             my_ax.view_init(45, 0)
+            update(None)
 
         # Change current cam (for sliders) with keyboard numbers 1 to 9
         elif ord(event.key) > 48 and ord(event.key) < 58:
