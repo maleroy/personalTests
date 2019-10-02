@@ -2,6 +2,7 @@ import sys
 import time
 
 from Adafruit_BNO055 import BNO055
+from math import radians, sin, cos, tan
 
 class Capture(object):
     def __init__(self):
@@ -14,9 +15,30 @@ class Capture(object):
         self.pps = 2
         self.imtot = int(self.nos2d*self.nos3d*self.pps)
         self.cap_slices = []
+        self.pr_slices = [[0]*self.nos2d for i in range(self.nos3d)]
+
+        self.bracket_ang = -40
+
+        self.r_cam = 50
+        self.p_cam = [0, 0, 0]
+
+    def set_p_cam(self, new_p):
+        self.p_cam = new_p
+
+    def get_p_cam(self):
+        return self.p_cam
+
+    def get_r_cam(self):
+        return self.r_cam
+
+    def get_nos2d(self):
+        return self.nos2d
 
     def get_dps2d(self):
         return self.dps2d
+
+    def get_nos3d(self):
+        return self.nos3d
 
     def get_dps3d(self):
         return self.dps3d
@@ -30,8 +52,15 @@ class Capture(object):
     def get_cap_slices(self):
         return self.cap_slices
 
+    def get_pr_slices(self):
+        return self.pr_slices
+
+    def get_bracket_ang(self):
+        return self.bracket_ang
+
     def add_to_cap_slices(self, val):
         self.cap_slices.append(val)
+        self.pr_slices[val[1]][val[0]] += 1
 
 
 def trigger_logic(h_imu, head, r_imu, roll, cap_slices, pps, imtot):
@@ -49,6 +78,13 @@ def trigger_logic(h_imu, head, r_imu, roll, cap_slices, pps, imtot):
 
     else:
         return [False, False, False]
+
+
+def sph2car(r_s, phi, theta):
+    x_c = r_s*sin(radians(theta))*cos(radians(phi))
+    y_c = r_s*sin(radians(theta))*sin(radians(phi))
+    z_c = r_s*cos(radians(theta))
+    return x_c, y_c, z_c
 
 
 def main():
@@ -86,21 +122,31 @@ def main():
     stat, stest, err = bno.get_system_status()
     print('System status: {} --- self-test result (should be 0x0F): 0x{:02X} --- error: {}'.format(stat, stest, err))
     print()
+    time.sleep(1)  # so that the IMU starts spitting data
 
+    nos2d = cap.get_nos2d()
     dps2d = cap.get_dps2d()
+    nos3d = cap.get_nos3d()
     dps3d = cap.get_dps3d()
     imtot = cap.get_imtot()
     pps = cap.get_pps()
+    br_ang = cap.get_bracket_ang()
+
+    cursor_up = (nos3d+1)*"\033[F"
 
     while True:
         y_imu, p_imu, r_imu = bno.read_euler()
         head['curr'] = int(((y_imu + 0.5*dps2d)%360)/dps2d)
         head['shft'] = int((y_imu%360)/dps2d)
 
-        roll['curr'] = int((r_imu%90)/dps3d)
-        roll['shft'] = int(((r_imu + 0.5*dps3d)%90)/dps3d)
+        luf_ang = r_imu - br_ang
+        roll['curr'] = int((luf_ang%90)/dps3d)
+        roll['shft'] = int(((luf_ang + 0.5*dps3d)%90)/dps3d)
+        cap.set_p_cam(sph2car(cap.get_r_cam(), y_imu, 90-luf_ang))
 
-        res = trigger_logic(y_imu, head, r_imu, roll, cap.get_cap_slices(), pps, imtot)
+        pre_cap_slices = cap.get_cap_slices()
+        cap_slices = cap.get_cap_slices()
+        res = trigger_logic(y_imu, head, r_imu, roll, cap_slices, pps, imtot)
 
         if res[0]:
             if res[1] and res[2]:
@@ -120,12 +166,22 @@ def main():
             imgs_taken += 1
             cap.add_to_cap_slices([head.get('curr'), roll.get('curr')])
 
-        cap_slices = cap.get_cap_slices()
-        sys.stdout.write('\ry={:+7.2f} -- p={:+7.2f}: -- r={:+7.2f} -- {}/{} images taken -- {}'.format(y_imu, p_imu, r_imu, len(cap_slices), imtot, cap_slices))
+        sys.stdout.write("y={:+7.2f} -- p={:+7.2f}: -- r={:+7.2f}" \
+                         " -- cur_pos: [{}, {}] -- luf_ang={:+7.2f} as br_ang={}" \
+                         " -- p_cam=[{:+7.2f}, {:+7.2f}, {:+7.2f}]\n" \
+                         .format(y_imu, p_imu, r_imu,
+                                 head.get('curr'), roll.get('curr'), luf_ang, br_ang,
+                                 *[i for i in cap.get_p_cam()]))
+
+        pr_slices = cap.get_pr_slices()
+        for i in range(nos3d):
+            sys.stdout.write(str(pr_slices[-i-1])+"\n")
+
+        sys.stdout.write(cursor_up)
         sys.stdout.flush()
 
         if len(cap_slices) == imtot:
-            print("\nFINAL CAPTURE TAKEN, WILL THUS QUIT LOOP")
+            print((nos3d+2)*"\n" + "FINAL CAPTURE TAKEN, WILL THUS QUIT LOOP\n")
             break
 
         time.sleep(.05)
