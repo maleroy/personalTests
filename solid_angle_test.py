@@ -494,39 +494,40 @@ def plot_footprint(my_ax, myc, cam_p, cur_phi, fix_ang_rad, luf_ang_rad=None,
 
     # Radial positions at ground considering luffing angle and bracket angle
     p_r_new = p_r_old - delta_h*np.tan(fix_ang_rad-luf_ang_rad)
-    p_r_new_in = p_r_old - delta_h*np.tan(
-        fix_ang_rad+np.radians(myc.hfov_v)-luf_ang_rad)
-    p_r_new_out = p_r_old - delta_h*np.tan(
-        fix_ang_rad-np.radians(myc.hfov_v)-luf_ang_rad)
-
-    # Converting them to cartesian coordinates
-    cur_phi_rad = np.radians(cur_phi)
-    p_r_new_x = p_r_new*np.cos(cur_phi_rad)
-    p_r_new_y = p_r_new*np.sin(cur_phi_rad)
-    p_r_new_in_x = p_r_new_in*np.cos(cur_phi_rad)
-    p_r_new_in_y = p_r_new_in*np.sin(cur_phi_rad)
-    p_r_new_out_x = p_r_new_out*np.cos(cur_phi_rad)
-    p_r_new_out_y = p_r_new_out*np.sin(cur_phi_rad)
-
-    # Deducing edge corners' positions
-    p_t_x_ll = p_r_new_in_x - delta_t*np.sin(cur_phi_rad)
-    p_t_y_ll = p_r_new_in_y + delta_t*np.cos(cur_phi_rad)
-
-    p_t_x_ul = p_r_new_out_x - delta_t*np.sin(cur_phi_rad)
-    p_t_y_ul = p_r_new_out_y + delta_t*np.cos(cur_phi_rad)
-
-    p_t_x_lr = p_r_new_in_x + delta_t*np.sin(cur_phi_rad)
-    p_t_y_lr = p_r_new_in_y - delta_t*np.cos(cur_phi_rad)
-
-    p_t_x_ur = p_r_new_out_x + delta_t*np.sin(cur_phi_rad)
-    p_t_y_ur = p_r_new_out_y - delta_t*np.cos(cur_phi_rad)
-
-    pxs = [p_r_new_x, p_t_x_ll, p_t_x_ul, p_t_x_ur, p_t_x_lr]
-    pys = [p_r_new_y, p_t_y_ll, p_t_y_ul, p_t_y_ur, p_t_y_lr]
-    pzs = 5*[myc.bldg_h]
 
     sca = np.abs(p_r_new) < myc.cam_center_max_r
     if sca:
+        p_r_new_in = p_r_old - delta_h*np.tan(
+            fix_ang_rad+np.radians(myc.hfov_v)-luf_ang_rad)
+        p_r_new_out = p_r_old - delta_h*np.tan(
+            fix_ang_rad-np.radians(myc.hfov_v)-luf_ang_rad)
+
+        # Converting them to cartesian coordinates
+        cur_phi_rad = np.radians(cur_phi)
+        p_r_new_x = p_r_new*np.cos(cur_phi_rad)
+        p_r_new_y = p_r_new*np.sin(cur_phi_rad)
+        p_r_new_in_x = p_r_new_in*np.cos(cur_phi_rad)
+        p_r_new_in_y = p_r_new_in*np.sin(cur_phi_rad)
+        p_r_new_out_x = p_r_new_out*np.cos(cur_phi_rad)
+        p_r_new_out_y = p_r_new_out*np.sin(cur_phi_rad)
+
+        # Deducing edge corners' positions
+        p_t_x_ll = p_r_new_in_x - delta_t*np.sin(cur_phi_rad)
+        p_t_y_ll = p_r_new_in_y + delta_t*np.cos(cur_phi_rad)
+
+        p_t_x_ul = p_r_new_out_x - delta_t*np.sin(cur_phi_rad)
+        p_t_y_ul = p_r_new_out_y + delta_t*np.cos(cur_phi_rad)
+
+        p_t_x_lr = p_r_new_in_x + delta_t*np.sin(cur_phi_rad)
+        p_t_y_lr = p_r_new_in_y - delta_t*np.cos(cur_phi_rad)
+
+        p_t_x_ur = p_r_new_out_x + delta_t*np.sin(cur_phi_rad)
+        p_t_y_ur = p_r_new_out_y - delta_t*np.cos(cur_phi_rad)
+
+        pxs = [p_r_new_x, p_t_x_ll, p_t_x_ul, p_t_x_ur, p_t_x_lr]
+        pys = [p_r_new_y, p_t_y_ll, p_t_y_ul, p_t_y_ur, p_t_y_lr]
+        pzs = 5*[myc.bldg_h]
+
         # Draw FOV's pyramid-like shape from camera to footprint
         if draw_trace:
             my_ax.plot([cam_p[0], p_t_x_ll],
