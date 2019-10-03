@@ -4,6 +4,7 @@ import time
 from Adafruit_BNO055 import BNO055
 from math import radians, sin, cos, tan
 
+
 class Capture(object):
     def __init__(self):
         self.nos2d = 4
@@ -64,10 +65,15 @@ class Capture(object):
 
 
 def trigger_logic(h_imu, head, r_imu, roll, cap_slices, pps, imtot):
-    slice_complete = bool(not(cap_slices.count([head.get('curr'), roll.get('curr')]) < pps))
+    slice_complete = bool(
+        not(cap_slices.count([head.get('curr'), roll.get('curr')]) < pps))
 
-    head_moved = bool((head.get('curr') != head.get('prev')) and (head.get('shft') != head.get('shpr')))
-    roll_moved = bool((roll.get('curr') != roll.get('prev')) and (roll.get('shft') != roll.get('shpr')))
+    head_moved = bool(
+        (head.get('curr') != head.get('prev'))
+        and (head.get('shft') != head.get('shpr')))
+    roll_moved = bool(
+        (roll.get('curr') != roll.get('prev'))
+        and (roll.get('shft') != roll.get('shpr')))
 
     crane_moved = head_moved or roll_moved
 
@@ -108,8 +114,10 @@ def main():
 
     bno = BNO055.BNO055(rst='P9_12')
 
-    P1 = {'x': 0x00, 'y': 0x01, 'z': 0x02, 'x_sign': 0x00, 'y_sign': 0x00, 'z_sign': 0x00}
-    PC = {'x': 0x01, 'y': 0x02, 'z': 0x00, 'x_sign': 0x01, 'y_sign': 0x01, 'z_sign': 0x00}
+    P1 = {'x': 0x00, 'y': 0x01, 'z': 0x02,
+          'x_sign': 0x00, 'y_sign': 0x00, 'z_sign': 0x00}
+    PC = {'x': 0x01, 'y': 0x02, 'z': 0x00,
+          'x_sign': 0x01, 'y_sign': 0x01, 'z_sign': 0x00}
 
     MODE_NDOF = 0x0C
     MODE_IMU = 0x08
@@ -120,7 +128,8 @@ def main():
     bno.set_axis_remap(**PC)
 
     stat, stest, err = bno.get_system_status()
-    print('System status: {} --- self-test result (should be 0x0F): 0x{:02X} --- error: {}'.format(stat, stest, err))
+    print('System status: {} --- self-test result (should be 0x0F): 0x{:02X}'
+          ' --- error: {}'.format(stat, stest, err))
     print()
     time.sleep(1)  # so that the IMU starts spitting data
 
@@ -136,12 +145,13 @@ def main():
 
     while True:
         y_imu, p_imu, r_imu = bno.read_euler()
-        head['curr'] = int(((y_imu + 0.5*dps2d)%360)/dps2d)
-        head['shft'] = int((y_imu%360)/dps2d)
+        head['curr'] = int(((y_imu + 0.5*dps2d) % 360)/dps2d)
+        head['shft'] = int((y_imu % 360)/dps2d)
 
         luf_ang = r_imu - br_ang
-        roll['curr'] = int((luf_ang%90)/dps3d)
-        roll['shft'] = int(((luf_ang + 0.5*dps3d)%90)/dps3d)
+        roll['curr'] = int((luf_ang % 90)/dps3d)
+        roll['shft'] = int(((luf_ang + 0.5*dps3d) % 90)/dps3d)
+
         cap.set_p_cam(sph2car(cap.get_r_cam(), y_imu, 90-luf_ang))
 
         pre_cap_slices = cap.get_cap_slices()
@@ -166,12 +176,12 @@ def main():
             imgs_taken += 1
             cap.add_to_cap_slices([head.get('curr'), roll.get('curr')])
 
-        sys.stdout.write("y={:+7.2f} -- p={:+7.2f}: -- r={:+7.2f}" \
-                         " -- cur_pos: [{}, {}] -- luf_ang={:+7.2f} as br_ang={}" \
-                         " -- p_cam=[{:+7.2f}, {:+7.2f}, {:+7.2f}]\n" \
+        sys.stdout.write("y={:+7.2f} -- p={:+7.2f}: -- r={:+7.2f}"
+                         " -- cur_pos: [{}, {}] -- luf_ang={:+7.2f} as br_ang="
+                         "{} -- p_cam=[{:+7.2f}, {:+7.2f}, {:+7.2f}]\n"
                          .format(y_imu, p_imu, r_imu,
-                                 head.get('curr'), roll.get('curr'), luf_ang, br_ang,
-                                 *[i for i in cap.get_p_cam()]))
+                                 head.get('curr'), roll.get('curr'), luf_ang,
+                                 br_ang, *[i for i in cap.get_p_cam()]))
 
         pr_slices = cap.get_pr_slices()
         for i in range(nos3d):
@@ -181,7 +191,7 @@ def main():
         sys.stdout.flush()
 
         if len(cap_slices) == imtot:
-            print((nos3d+2)*"\n" + "FINAL CAPTURE TAKEN, WILL THUS QUIT LOOP\n")
+            print((nos3d+2)*"\n" + "FINAL PIC TAKEN, WILL THUS QUIT LOOP\n")
             break
 
         time.sleep(.05)
