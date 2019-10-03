@@ -117,11 +117,14 @@ def trigger_logic(head, roll, cap_slices, pps, imtot):
         return [False, False, False]
 
 
-def sph2car(r_s, phi, theta):
+def sph2car(r_s, phi, theta, center=None):
+    if center is None:
+        center = [0, 0, 0]
     x_c = r_s*sin(radians(theta))*cos(radians(phi))
     y_c = r_s*sin(radians(theta))*sin(radians(phi))
     z_c = r_s*cos(radians(theta))
-    return [x_c, y_c, z_c]
+
+    return [i+j for i, j in zip([x_c, y_c, z_c], center)] 
 
 
 def main():
@@ -183,9 +186,8 @@ def main():
         roll['curr'] = int((luf_ang % 90)/dps3d)
         roll['shft'] = int(((luf_ang + 0.5*dps3d) % 90)/dps3d)
 
-        cam_sph = sph2car(cap.get_r_cam(), y_imu, 90-luf_ang)
-        cap.set_p_cam([x+y for x, y in zip(cam_sph, [
-            cap.tow_x, cap.tow_y, cap.tow_z])])
+        cap.set_p_cam(sph2car(cap.get_r_cam(), y_imu, 90-luf_ang, [
+            cap.tow_x, cap.tow_y, cap.tow_z+cap.tow_h]))
         p_cam = cap.get_p_cam()
 
         luf_ang_rad = radians(luf_ang)
@@ -202,7 +204,7 @@ def main():
         cap_slices = cap.get_cap_slices()
         res = trigger_logic(head, roll, cap_slices, pps, imtot)
 
-        if res[0]:
+        if res[0] and cap.get_act_status():
             if res[1] and res[2]:
                 head['prev'] = head.get('curr')
                 head['shpr'] = head.get('shft')

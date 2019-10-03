@@ -5,8 +5,10 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
+from matplotlib.patches import Circle
 from matplotlib.widgets import Slider, RadioButtons
 from mpl_toolkits.mplot3d import axes3d
+import mpl_toolkits.mplot3d.art3d as art3d
 
 np.set_printoptions(sign='+', precision=2, suppress=True)
 
@@ -304,9 +306,9 @@ def main():
         elif event.key == 'x':  # Fixed camera bracket angle increase
             check_slider_min_max(sfix)
 
-        elif event.key == 'c':  # Max distance tower-cam footprint decrease
+        elif event.key == 'v':  # Max distance tower-cam footprint decrease
             check_slider_min_max(smaxd, '-')
-        elif event.key == 'v':  # Max distance tower-cam footprint increase
+        elif event.key == 'b':  # Max distance tower-cam footprint increase
             check_slider_min_max(smaxd)
 
         elif event.key == 'n':  # Building height decrease
@@ -446,6 +448,11 @@ def plot_all(my_ax, myc, msh_p, cam_p, jt_p, cur_phi):
         [myc.tow_z, myc.tow_z+myc.tow_h, jt_p[2]], c="orange")
     if myc.plot_bldg and not myc.bldg_h < 1 and not myc.bldg_w < 1:
         plot_bldg(my_ax, myc)
+
+    ftpt_lim = Circle((myc.tow_x, myc.tow_y), myc.cam_center_max_r, fill=False,
+                      alpha=0.1)
+    my_ax.add_patch(ftpt_lim)
+    art3d.pathpatch_2d_to_3d(ftpt_lim, z=0, zdir="z")
 
     # Plot cameras
     for i, item in enumerate(cam_p):
