@@ -28,6 +28,15 @@ class Capture(object):
         self.hfov_h = 0.5*64.2
         self.hfov_v = 0.5*45.4
 
+        self.cam_r_limit = 75
+        self.cam_active = True
+
+    def get_act_status(self):
+        return self.cam_active
+
+    def set_act_status(self, p_r):
+        self.cam_active = p_r < self.cam_r_limit
+
     def get_hfov_h(self):
         return self.hfov_h
 
@@ -180,6 +189,8 @@ def main():
         p_r_old = sqrt(p_cam[0]**2 + p_cam[1]**2)
         p_r_new = p_r_old + delta_h*tan(radians(br_ang)+luf_ang_rad)
 
+        cap.set_act_status(p_r_new)
+
         pre_cap_slices = cap.get_cap_slices()
         cap_slices = cap.get_cap_slices()
         res = trigger_logic(head, roll, cap_slices, pps, imtot)
@@ -205,11 +216,11 @@ def main():
         sys.stdout.write("y={:+7.2f} -- p={:+7.2f}: -- r={:+7.2f}"
                          " -- cur_pos: [{}, {}] -- luf_ang={:+7.2f} as br_ang="
                          "{} -- p_cam=[{:+7.2f}, {:+7.2f}, {:+7.2f}] -- p_r_ol"
-                         "d={} and p_r_new={}\n"
+                         "d={} and p_r_new={} -- Cam active? -> {}\n"
                          .format(y_imu, p_imu, r_imu,
                                  head.get('curr'), roll.get('curr'), luf_ang,
                                  br_ang, *[i for i in cap.get_p_cam()],
-                                 p_r_old, p_r_new))
+                                 p_r_old, p_r_new, cap.get_act_status()))
 
         pr_slices = cap.get_pr_slices()
         for i in range(nos3d):
