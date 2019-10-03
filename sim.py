@@ -31,6 +31,11 @@ class Capture(object):
         self.cam_r_limit = 75
         self.cam_active = True
 
+        self.tow_x = 10
+        self.tow_y = 20
+        self.tow_z = 30
+        self.tow_h = 40
+
     def get_act_status(self):
         return self.cam_active
 
@@ -116,7 +121,7 @@ def sph2car(r_s, phi, theta):
     x_c = r_s*sin(radians(theta))*cos(radians(phi))
     y_c = r_s*sin(radians(theta))*sin(radians(phi))
     z_c = r_s*cos(radians(theta))
-    return x_c, y_c, z_c
+    return [x_c, y_c, z_c]
 
 
 def main():
@@ -178,13 +183,15 @@ def main():
         roll['curr'] = int((luf_ang % 90)/dps3d)
         roll['shft'] = int(((luf_ang + 0.5*dps3d) % 90)/dps3d)
 
-        cap.set_p_cam(sph2car(cap.get_r_cam(), y_imu, 90-luf_ang))
+        cam_sph = sph2car(cap.get_r_cam(), y_imu, 90-luf_ang)
+        cap.set_p_cam([x+y for x, y in zip(cam_sph, [
+            cap.tow_x, cap.tow_y, cap.tow_z])])
         p_cam = cap.get_p_cam()
 
         luf_ang_rad = radians(luf_ang)
 
         delta_h = p_cam[2] - cap.get_bldg_h()
-        #delta_t = delta_h*tan(radians(cap.get_hfov_h()))
+        # delta_t = delta_h*tan(radians(cap.get_hfov_h()))
 
         p_r_old = sqrt(p_cam[0]**2 + p_cam[1]**2)
         p_r_new = p_r_old + delta_h*tan(radians(br_ang)+luf_ang_rad)
