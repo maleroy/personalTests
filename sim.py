@@ -18,7 +18,7 @@ class Capture(object):
         self.cap_slices = []
         self.pr_slices = [[0]*self.nos2d for i in range(self.nos3d)]
 
-        self.bracket_ang = -40
+        self.bracket_ang = -10
 
         self.r_cam = 50
         self.p_cam = [0, 0, 0]
@@ -174,11 +174,11 @@ def main():
 
         luf_ang_rad = radians(luf_ang)
 
-        delta_h = p_cam[2] - cap.get_bldg_h
+        delta_h = p_cam[2] - cap.get_bldg_h()
         #delta_t = delta_h*tan(radians(cap.get_hfov_h()))
 
         p_r_old = sqrt(p_cam[0]**2 + p_cam[1]**2)
-        p_r_new = p_r_old - delta_h*tan(radians(br_ang)-luf_ang_rad)
+        p_r_new = p_r_old + delta_h*tan(radians(br_ang)+luf_ang_rad)
 
         pre_cap_slices = cap.get_cap_slices()
         cap_slices = cap.get_cap_slices()
