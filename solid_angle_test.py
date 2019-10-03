@@ -175,7 +175,8 @@ def main():
     for i in range(myc.n_cams):
         p_x, p_y, p_z = sph2car(myc.k_cams[i]*r_s, phi_init, theta_init)
 
-        if ((p_x**2+p_y**2) < myc.cam_center_max_r**2 and not p_i == myc.prev_2d_sect[i]):
+        if (((p_x**2+p_y**2) < myc.cam_center_max_r**2
+             and not p_i == myc.prev_2d_sect[i])):
             myc.sect_passed_2d[i][p_i] = [p_x, p_y, p_z, phi_init,
                                           myc.luf_ang_rad]
             myc.prev_2d_sect[i] = p_i
@@ -191,6 +192,11 @@ def main():
 
     # For when a value is changed (either with widget or key presses)
     def update(val):
+        """Update object instance and plot as per widget status
+
+        Args:
+            val (widget value): Attribute to access values
+        """
         my_ax.clear()
 
         # In case camera's fixed angle or bldg height is changed
@@ -237,7 +243,8 @@ def main():
         for i in range(myc.n_cams):
             p_x, p_y, p_z = sph2car(myc.k_cams[i]*r_s, new_phi, new_theta)
 
-            if ((p_x**2+p_y**2) < myc.cam_center_max_r**2 and not p_i == myc.prev_2d_sect[i]):
+            if (((p_x**2+p_y**2) < myc.cam_center_max_r**2
+                 and not p_i == myc.prev_2d_sect[i])):
                 myc.sect_passed_2d[i][p_i] = [p_x, p_y, p_z, new_phi,
                                               myc.luf_ang_rad]
                 myc.prev_2d_sect[i] = p_i
@@ -272,7 +279,7 @@ def main():
         """Handles keyboard events
 
         Args:
-            event (key_press_event): key that was pressed
+            event (key_press_event): Key that was pressed
         """
         if event.key == 'right':  # Azimuth increase
             k_mul = 5
@@ -296,6 +303,11 @@ def main():
             check_slider_min_max(sfix, '-')
         elif event.key == 'x':  # Fixed camera bracket angle increase
             check_slider_min_max(sfix)
+
+        elif event.key == 'c':  # Max distance tower-cam footprint decrease
+            check_slider_min_max(smaxd, '-')
+        elif event.key == 'v':  # Max distance tower-cam footprint increase
+            check_slider_min_max(smaxd)
 
         elif event.key == 'n':  # Building height decrease
             check_slider_min_max(sbldh, '-')
@@ -350,9 +362,9 @@ def main():
         """Updates slider values while checking if min / max has been reached
 
         Args:
-            sli (matplotlib widget): slider to be modified
-            sign (str, optional): increase / decrease logic. Defaults to '+'.
-            mul (int, optional): valstep multiplication factor. Defaults to 1.
+            sli (matplotlib widget): Slider to be modified
+            sign (str, optional): Increase / decrease logic. Defaults to '+'.
+            mul (int, optional): Valstep multiplication factor. Defaults to 1.
         """
         if sign == '+':
             n_v = (sli.valmax if sli.val+sli.valstep*mul > sli.valmax else (
@@ -366,8 +378,8 @@ def main():
         """Executes a boolean change in a parameter of a class object
 
         Args:
-            myc (class object): object whose argument must be changed
-            plot_bool (string): argument
+            myc (class object): Object whose argument must be changed
+            plot_bool (string): Argument
         """
         exec(plot_bool + " = not " + plot_bool)
         update(None)
@@ -383,9 +395,9 @@ def sph2car(r_s, phi, theta):
     """Converts spherical coordinates into cartesian coordinates
 
     Args:
-        r_s (float): radius
-        phi (float): azimuthal angle in [deg]
-        theta (float): polar angle in [deg]
+        r_s (float): Radius
+        phi (float): Azimuthal angle in [deg]
+        theta (float): Polar angle in [deg]
 
     Returns:
         3 floats: the 3 cartesian coordinates
@@ -400,11 +412,11 @@ def get_interval(lst, val):
     """Determines the interval a value is in
 
     Args:
-        lst (np.array): list of intervals
-        val (float): value whose interval must be found
+        lst (np.array): List of intervals
+        val (float): Value whose interval must be found
 
     Returns:
-        2 floats and 1 int: the interval boundaries and the left index
+        2 floats and 1 int: The interval boundaries and the left index
     """
     for i in range(len(lst)-1):
         if lst[i] <= val <= lst[i+1]:
@@ -418,10 +430,12 @@ def plot_all(my_ax, myc, msh_p, cam_p, jt_p, cur_phi):
     """Plots a 3D surface as well as the line from center to current point
 
     Args:
-        my_ax (plt figure 3D subplot): where results are plotted
-        myc (Crane): instance containing all physical parameters and history
-        msh_p (np.array): current mesh coordinates
-        cam_p (float): current point's coordinates
+        my_ax (plt figure 3D subplot): Where results are plotted
+        myc (Crane): Instance containing all physical parameters and history
+        msh_p (np.array): Current mesh coordinates
+        cam_p (float): Current point's coordinates
+        jt_p (float): Jib tip point's coordinates
+        cur_phi (float): Current azimuthal angle [deg]
     """
     # Plots current sector as a wireframe
     if myc.plot_sect_hist:
@@ -452,22 +466,22 @@ def plot_all(my_ax, myc, msh_p, cam_p, jt_p, cur_phi):
 
 def plot_footprint(my_ax, myc, cam_p, cur_phi, fix_ang_rad, luf_ang_rad=None,
                    draw_trace=True, colr="black", alp=0.1, sc_size=10):
-    """[summary]
+    """Plots the footprint of a single camera
 
     Args:
-        my_ax ([type]): [description]
-        myc ([type]): [description]
-        cam_p ([type]): [description]
-        cur_phi ([type]): [description]
-        fix_ang_rad ([type]): [description]
-        luf_ang_rad ([type], optional): [description]. Defaults to None.
-        draw_trace (bool, optional): [description]. Defaults to True.
-        colr (str, optional): [description]. Defaults to "black".
-        alp (float, optional): [description]. Defaults to 0.1.
-        sc_size (int, optional): [description]. Defaults to 10.
+        my_ax (plt figure 3D subplot): Where results are plotted
+        myc (Crane): Instance containing all physical parameters and history
+        cam_p (float): Current point's coordinates
+        cur_phi (float): Current azimuthal angle [deg]
+        fix_ang_rad (float): Bracket angle [rad]
+        luf_ang_rad (float, optional): Luffing angle [rad]. Defaults to None.
+        draw_trace (bool, optional): Draws pyramid edges. Defaults to True.
+        colr (str, optional): Footprint color. Defaults to "black".
+        alp (float, optional): Footprint alpha value. Defaults to 0.1.
+        sc_size (int, optional): Scatter point size. Defaults to 10.
 
     Returns:
-        [type]: [description]
+        bool: Bool to say if camera is active (i.e. should take a pic or not)
     """
     if luf_ang_rad is None:
         luf_ang_rad = myc.luf_ang_rad
@@ -543,15 +557,15 @@ def plot_footprint(my_ax, myc, cam_p, cur_phi, fix_ang_rad, luf_ang_rad=None,
 
 
 def get_polygon_area(x_s, y_s, n_points):
-    """[summary]
+    """Computes the area of a polygon made of n_points
 
     Args:
-        x_s ([type]): [description]
-        y_s ([type]): [description]
-        n_points ([type]): [description]
+        x_s (list): Array of polygon's points' x coordinates
+        y_s (list): Array of polygon's points' y coordinates
+        n_points (int): Number of points the polygon has
 
     Returns:
-        [type]: [description]
+        float: Polygon are
     """
     area = 0.0
     idx = n_points-1
@@ -567,8 +581,8 @@ def plot_bldg(my_ax, myc):
     """Plots the building next to the crane
 
     Args:
-        my_ax (plt figure subplot): where sectors should be plotted
-        myc (Crane): instance containing all physical parameters and history
+        my_ax (plt figure subplot): Where sectors should be plotted
+        myc (Crane): Instance containing all physical parameters and history
     """
     x_1 = myc.bldg_d
     x_2 = myc.bldg_d+myc.bldg_w
@@ -603,8 +617,8 @@ def plot_sect_hist(my_ax, myc):
     """Plots all sectors that have already been passed
 
     Args:
-        my_ax (plt figure subplot): where sectors should be plotted
-        myc (Crane): instance containing all physical parameters and history
+        my_ax (plt figure subplot): Where sectors should be plotted
+        myc (Crane): Instance containing all physical parameters and history
     """
     for i in range(myc.sect_passed.shape[0]):
         for j in range(myc.sect_passed.shape[1]):
@@ -634,8 +648,8 @@ def plot_footprint_hist(my_ax, myc):
     """Plots the cam footprints on sectors that have already been passed over
 
     Args:
-        my_ax (plt figure subplot): where sectors should be plotted
-        myc (Crane): instance containing all physical parameters and history
+        my_ax (plt figure subplot): Where sectors should be plotted
+        myc (Crane): Instance containing all physical parameters and history
     """
     for i in range(myc.n_cams):
         for j in range(myc.sect_passed_2d.shape[1]):
@@ -660,8 +674,8 @@ def set_axes_equal(my_ax, myc):
     my_ax.set_aspect('equal') and my_ax.axis('equal') not working for 3D.
 
     Args
-        my_ax (plt figure subplot): where sectors should be plotted
-        myc (Crane): instance containing all physical parameters and history
+        my_ax (plt figure subplot): Where sectors should be plotted
+        myc (Crane): Instance containing all physical parameters and history
     """
     my_ax.set_xlabel('X axis')
     my_ax.set_ylabel('Y axis')
