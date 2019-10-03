@@ -66,6 +66,8 @@ class Crane(object):
         self.bldg_d = 0
         self.bldg_w = 0
 
+        self.cam_center_max_r = 2*self.jib_l//10*10
+
     def clear_sect_passed(self):
         """Clears history of which sectors have already been passed through
         """
@@ -89,9 +91,11 @@ def main():
     phi_init = 90  # 60
     theta_init = 90  # 33.75
 
-    s_l = 0.15
     s_w = 0.15
     s_h = 0.01
+    s_l = 0.15
+    s_u = 0.4
+    s_uk = 0.05
 
     # Defining plot area and widgets
     fig = plt.figure(figsize=(6, 6))
@@ -100,35 +104,47 @@ def main():
     scol = "blue"
     salp = 0.2
 
-    axradio = plt.axes([s_l, 0.35, s_w, 10*s_h])
+    axradio = plt.axes([s_l, s_u, s_w, 10*s_h])
     rcams = RadioButtons(
         axradio, tuple(
             ['Cam '+str(x+1)+' selected' for x in range(myc.n_cams)]), 0,
         activecolor='green')
 
-    axphi = plt.axes([s_l, 0.30, s_w, s_h])
+    s_u -= s_uk
+    axphi = plt.axes([s_l, s_u, s_w, s_h])
     sphi = Slider(axphi, 'Azimuthal angle (phi)', phi_l[0], phi_l[-1],
                   valinit=phi_init, valstep=1, color=scol, alpha=salp)
 
-    axtheta = plt.axes([s_l, 0.25, s_w, s_h])
+    s_u -= s_uk
+    axtheta = plt.axes([s_l, s_u, s_w, s_h])
     sthet = Slider(axtheta, 'Polar angle (theta)', theta_l[0], theta_l[-1],
                    valinit=theta_init, valstep=1, color=scol, alpha=salp)
 
-    axfix = plt.axes([s_l, 0.20, s_w, s_h])
+    s_u -= s_uk
+    axfix = plt.axes([s_l, s_u, s_w, s_h])
     sfix = Slider(axfix, 'Selected cam\'s bracket angle', 0, 80,
                   valinit=myc.fix_ang[0], valstep=10, color=scol, alpha=salp)
 
-    axbldgh = plt.axes([s_l, 0.15, s_w, s_h])
+    s_u -= s_uk
+    axbldgh = plt.axes([s_l, s_u, s_w, s_h])
     sbldh = Slider(axbldgh, 'Building height', myc.tow_z, myc.tow_z+myc.tow_h,
                    valinit=myc.bldg_h, valstep=10, color=scol, alpha=salp)
 
-    axbldgd = plt.axes([s_l, 0.10, s_w, s_h])
+    s_u -= s_uk
+    axbldgd = plt.axes([s_l, s_u, s_w, s_h])
     sbldd = Slider(axbldgd, 'Building distance', 0, myc.jib_l,
                    valinit=myc.bldg_d, valstep=5, color=scol, alpha=salp)
 
-    axbldgw = plt.axes([s_l, 0.05, s_w, s_h])
+    s_u -= s_uk
+    axbldgw = plt.axes([s_l, s_u, s_w, s_h])
     sbldw = Slider(axbldgw, 'Building width', 0, 2*myc.jib_l,
                    valinit=myc.bldg_w, valstep=5, color=scol, alpha=salp)
+
+    s_u -= s_uk
+    axmaxd = plt.axes([s_l, s_u, s_w, s_h])
+    smaxd = Slider(axmaxd, 'Maximum distance from center', 0,
+                   2*myc.jib_l//10*10, valinit=1.1*myc.jib_l//10*10, valstep=5,
+                   color=scol, alpha=salp)
 
     # Defining current sector camera is in
     p_a, p_b, p_i = get_interval(phi_l, phi_init)
@@ -159,10 +175,11 @@ def main():
     for i in range(myc.n_cams):
         p_x, p_y, p_z = sph2car(myc.k_cams[i]*r_s, phi_init, theta_init)
 
-        if not p_i == myc.prev_2d_sect[i]:
+        if ((p_x**2+p_y**2) < myc.cam_center_max_r**2 and not p_i == myc.prev_2d_sect[i]):
             myc.sect_passed_2d[i][p_i] = [p_x, p_y, p_z, phi_init,
                                           myc.luf_ang_rad]
             myc.prev_2d_sect[i] = p_i
+
         p_x += myc.tow_x
         p_y += myc.tow_y
         p_z += myc.tow_z + myc.tow_h
@@ -183,6 +200,7 @@ def main():
         myc.bldg_h = sbldh.val
         myc.bldg_d = sbldd.val
         myc.bldg_w = sbldw.val
+        myc.cam_center_max_r = smaxd.val
 
         # Re-determine current slice / sector and its coordinates
         new_phi = sphi.val
@@ -219,7 +237,7 @@ def main():
         for i in range(myc.n_cams):
             p_x, p_y, p_z = sph2car(myc.k_cams[i]*r_s, new_phi, new_theta)
 
-            if not p_i == myc.prev_2d_sect[i]:
+            if ((p_x**2+p_y**2) < myc.cam_center_max_r**2 and not p_i == myc.prev_2d_sect[i]):
                 myc.sect_passed_2d[i][p_i] = [p_x, p_y, p_z, new_phi,
                                               myc.luf_ang_rad]
                 myc.prev_2d_sect[i] = p_i
@@ -237,13 +255,14 @@ def main():
     # Initial update now that everything is set up
     update(None)
 
+    rcams.on_clicked(update)
     sphi.on_changed(update)
     sthet.on_changed(update)
     sfix.on_changed(update)
     sbldh.on_changed(update)
     sbldd.on_changed(update)
     sbldw.on_changed(update)
-    rcams.on_clicked(update)
+    smaxd.on_changed(update)
 
     my_ax.view_init(45, 0)
     set_axes_equal(my_ax, myc)
@@ -416,12 +435,12 @@ def plot_all(my_ax, myc, msh_p, cam_p, jt_p, cur_phi):
 
     # Plot cameras
     for i, item in enumerate(cam_p):
-        my_ax.scatter(*item, s=50, c="green")
-
         # Plot current footprint
         if myc.plot_cur_footprint:
-            plot_footprint(my_ax, myc, item, cur_phi, myc.fix_ang_rad[i],
-                           colr="g", alp=0.3, sc_size=20)
+            sca = plot_footprint(my_ax, myc, item, cur_phi, myc.fix_ang_rad[i],
+                                 colr="g", alp=0.3, sc_size=20)
+
+        my_ax.scatter(*item, s=50, c="green" if sca else "red")
     print()
 
     # Plot footprint history
@@ -440,11 +459,15 @@ def plot_footprint(my_ax, myc, cam_p, cur_phi, fix_ang_rad, luf_ang_rad=None,
         myc ([type]): [description]
         cam_p ([type]): [description]
         cur_phi ([type]): [description]
-        delta_h ([type]): [description]
-        delta_r ([type]): [description]
-        delta_t ([type]): [description]
+        fix_ang_rad ([type]): [description]
+        luf_ang_rad ([type], optional): [description]. Defaults to None.
+        draw_trace (bool, optional): [description]. Defaults to True.
         colr (str, optional): [description]. Defaults to "black".
-        alp (float, optional): [description]. Defaults to 0.25.
+        alp (float, optional): [description]. Defaults to 0.1.
+        sc_size (int, optional): [description]. Defaults to 10.
+
+    Returns:
+        [type]: [description]
     """
     if luf_ang_rad is None:
         luf_ang_rad = myc.luf_ang_rad
@@ -488,34 +511,48 @@ def plot_footprint(my_ax, myc, cam_p, cur_phi, fix_ang_rad, luf_ang_rad=None,
     pys = [p_r_new_y, p_t_y_ll, p_t_y_ul, p_t_y_ur, p_t_y_lr]
     pzs = 5*[myc.bldg_h]
 
-    # Draw FOV's pyramid-like shape from camera to footprint
-    if draw_trace:
-        my_ax.plot([cam_p[0], p_t_x_ll],
-                   [cam_p[1], p_t_y_ll],
-                   [cam_p[2], myc.bldg_h],
-                   color=colr, alpha=alp)
-        my_ax.plot([cam_p[0], p_t_x_lr],
-                   [cam_p[1], p_t_y_lr],
-                   [cam_p[2], myc.bldg_h],
-                   color=colr, alpha=alp)
-        my_ax.plot([cam_p[0], p_t_x_ul],
-                   [cam_p[1], p_t_y_ul],
-                   [cam_p[2], myc.bldg_h],
-                   color=colr, alpha=alp)
-        my_ax.plot([cam_p[0], p_t_x_ur],
-                   [cam_p[1], p_t_y_ur],
-                   [cam_p[2], myc.bldg_h],
-                   color=colr, alpha=alp)
+    sca = np.abs(p_r_new) < myc.cam_center_max_r
+    if sca:
+        # Draw FOV's pyramid-like shape from camera to footprint
+        if draw_trace:
+            my_ax.plot([cam_p[0], p_t_x_ll],
+                       [cam_p[1], p_t_y_ll],
+                       [cam_p[2], myc.bldg_h],
+                       color=colr, alpha=alp)
+            my_ax.plot([cam_p[0], p_t_x_lr],
+                       [cam_p[1], p_t_y_lr],
+                       [cam_p[2], myc.bldg_h],
+                       color=colr, alpha=alp)
+            my_ax.plot([cam_p[0], p_t_x_ul],
+                       [cam_p[1], p_t_y_ul],
+                       [cam_p[2], myc.bldg_h],
+                       color=colr, alpha=alp)
+            my_ax.plot([cam_p[0], p_t_x_ur],
+                       [cam_p[1], p_t_y_ur],
+                       [cam_p[2], myc.bldg_h],
+                       color=colr, alpha=alp)
 
-    # Draw edges + center point then cover it with a patch
-    my_ax.scatter(pxs, pys, pzs, s=sc_size, c=colr, alpha=alp)
-    my_ax.plot_trisurf(pxs, pys, pzs, color=colr, alpha=alp, shade=False)
+        # Draw edges + center point then cover it with a patch
+        my_ax.scatter(pxs, pys, pzs, s=sc_size, c=colr, alpha=alp)
+        my_ax.plot_trisurf(pxs, pys, pzs, color=colr, alpha=alp, shade=False)
 
-    print("{:.1f}[m^2]".format(
-        get_polygon_area(np.array(pxs[1:]), np.array(pys[1:]), 4)))
+        print("{:.1f}[m^2]".format(
+            get_polygon_area(np.array(pxs[1:]), np.array(pys[1:]), 4)))
+
+    return sca
 
 
 def get_polygon_area(x_s, y_s, n_points):
+    """[summary]
+
+    Args:
+        x_s ([type]): [description]
+        y_s ([type]): [description]
+        n_points ([type]): [description]
+
+    Returns:
+        [type]: [description]
+    """
     area = 0.0
     idx = n_points-1
 
