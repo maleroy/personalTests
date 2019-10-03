@@ -1,8 +1,8 @@
 import sys
 import time
 
+from math import radians, sin, cos, tan, sqrt
 from Adafruit_BNO055 import BNO055
-from math import radians, sin, cos, tan
 
 
 class Capture(object):
@@ -22,6 +22,23 @@ class Capture(object):
 
         self.r_cam = 50
         self.p_cam = [0, 0, 0]
+
+        self.bldg_h = 0
+
+        self.hfov_h = 0.5*64.2
+        self.hfov_v = 0.5*45.4
+
+    def get_hfov_h(self):
+        return self.hfov_h
+
+    def get_hfov_v(self):
+        return self.hfov_v
+
+    def set_bldg_h(self, new_h):
+        self.bldg_h = new_h
+
+    def get_bldg_h(self):
+        return self.bldg_h
 
     def set_p_cam(self, new_p):
         self.p_cam = new_p
@@ -64,9 +81,9 @@ class Capture(object):
         self.pr_slices[val[1]][val[0]] += 1
 
 
-def trigger_logic(h_imu, head, r_imu, roll, cap_slices, pps, imtot):
+def trigger_logic(head, roll, cap_slices, pps, imtot):
     slice_complete = bool(
-        not(cap_slices.count([head.get('curr'), roll.get('curr')]) < pps))
+        not cap_slices.count([head.get('curr'), roll.get('curr')]) < pps)
 
     head_moved = bool(
         (head.get('curr') != head.get('prev'))
@@ -153,10 +170,19 @@ def main():
         roll['shft'] = int(((luf_ang + 0.5*dps3d) % 90)/dps3d)
 
         cap.set_p_cam(sph2car(cap.get_r_cam(), y_imu, 90-luf_ang))
+        p_cam = cap.get_p_cam()
+
+        luf_ang_rad = radians(luf_ang)
+
+        delta_h = p_cam[2] - cap.get_bldg_h
+        #delta_t = delta_h*tan(radians(cap.get_hfov_h()))
+
+        p_r_old = sqrt(p_cam[0]**2 + p_cam[1]**2)
+        p_r_new = p_r_old - delta_h*tan(radians(br_ang)-luf_ang_rad)
 
         pre_cap_slices = cap.get_cap_slices()
         cap_slices = cap.get_cap_slices()
-        res = trigger_logic(y_imu, head, r_imu, roll, cap_slices, pps, imtot)
+        res = trigger_logic(head, roll, cap_slices, pps, imtot)
 
         if res[0]:
             if res[1] and res[2]:
@@ -178,10 +204,12 @@ def main():
 
         sys.stdout.write("y={:+7.2f} -- p={:+7.2f}: -- r={:+7.2f}"
                          " -- cur_pos: [{}, {}] -- luf_ang={:+7.2f} as br_ang="
-                         "{} -- p_cam=[{:+7.2f}, {:+7.2f}, {:+7.2f}]\n"
+                         "{} -- p_cam=[{:+7.2f}, {:+7.2f}, {:+7.2f}] -- p_r_ol"
+                         "d={} and p_r_new={}\n"
                          .format(y_imu, p_imu, r_imu,
                                  head.get('curr'), roll.get('curr'), luf_ang,
-                                 br_ang, *[i for i in cap.get_p_cam()]))
+                                 br_ang, *[i for i in cap.get_p_cam()],
+                                 p_r_old, p_r_new))
 
         pr_slices = cap.get_pr_slices()
         for i in range(nos3d):
