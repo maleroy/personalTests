@@ -216,7 +216,7 @@ def main():
         sys.stdout.write("y={:+7.2f} -- p={:+7.2f}: -- r={:+7.2f}"
                          " -- cur_pos: [{}, {}] -- luf_ang={:+7.2f} as br_ang="
                          "{} -- p_cam=[{:+7.2f}, {:+7.2f}, {:+7.2f}] -- p_r_ol"
-                         "d={} and p_r_new={} -- Cam active? -> {}\n"
+                         "d={:+7.2f} and p_r_new={:+7.2f} -- Cam act? -> {}\n"
                          .format(y_imu, p_imu, r_imu,
                                  head.get('curr'), roll.get('curr'), luf_ang,
                                  br_ang, *[i for i in cap.get_p_cam()],
