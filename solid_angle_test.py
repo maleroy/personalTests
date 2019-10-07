@@ -61,7 +61,8 @@ class Crane(object):
         self.plot_cur_footprint = True
         self.plot_footprint_hist = False
         self.plot_sect_hist = False
-        self.plot_bldg = False
+        self.plot_bldg = True
+        self.plot_bldg_as_wedge = False
 
         # Building characteristics
         self.bldg_h = 0
@@ -337,7 +338,9 @@ def main():
         elif event.key == 'j':  # Hides / Shows footprints' history
             hide_show_plot(myc, "myc.plot_footprint_hist")
         elif event.key == 'k':  # Hides / Shows building
-            hide_show_plot(myc, "myc.plot_bldg")
+            hide_show_plot(myc, "myc.plot_bldg")        
+        elif event.key == 'K':  # Toggles between wedge and polygon bldg
+            hide_show_plot(myc, "myc.plot_bldg_as_wedge")
 
         elif event.key == 't':  # Go to top view
             my_ax.view_init(90, 0)
@@ -350,15 +353,19 @@ def main():
             update(None)
 
         # Change current cam (for sliders) with keyboard numbers 1 to 9
-        elif ord(event.key) > 48 and ord(event.key) < 58:
-            myc.cur_cam = myc.n_cams-1 if int(
-                event.key) % myc.n_cams == 0 else(
-                    int(event.key) % myc.n_cams - 1)
-            sfix.set_val(myc.fix_ang[myc.cur_cam])
-            rcams.set_active(myc.cur_cam)
+        elif len(event.key) == 1:
+            if ord(event.key) > 48 and ord(event.key) < 58:
+                myc.cur_cam = myc.n_cams-1 if int(
+                    event.key) % myc.n_cams == 0 else(
+                        int(event.key) % myc.n_cams - 1)
+                sfix.set_val(myc.fix_ang[myc.cur_cam])
+                rcams.set_active(myc.cur_cam)
 
         else:
-            print(event.key)
+            if ((not event.key == 'control'
+                 and not event.key == 'alt'
+                 and not event.key == 'shift')):
+                print(event.key)
 
     def check_slider_min_max(sli, sign='+', mul=1):
         """Updates slider values while checking if min / max has been reached
@@ -446,6 +453,7 @@ def plot_all(my_ax, myc, msh_p, cam_p, jt_p, cur_phi):
     my_ax.plot(
         [myc.tow_x, myc.tow_x, jt_p[0]], [myc.tow_y, myc.tow_y, jt_p[1]],
         [myc.tow_z, myc.tow_z+myc.tow_h, jt_p[2]], c="orange")
+
     if myc.plot_bldg and not myc.bldg_h < 1 and not myc.bldg_w < 1:
         plot_bldg(my_ax, myc)
 
@@ -462,7 +470,7 @@ def plot_all(my_ax, myc, msh_p, cam_p, jt_p, cur_phi):
                                  colr="g", alp=0.3, sc_size=20)
 
         my_ax.scatter(*item, s=50, c="green" if sca else "red")
-    print()
+    # print()
 
     # Plot footprint history
     if myc.plot_footprint_hist:
@@ -592,33 +600,65 @@ def plot_bldg(my_ax, myc):
         my_ax (plt figure subplot): Where sectors should be plotted
         myc (Crane): Instance containing all physical parameters and history
     """
-    x_1 = myc.bldg_d
-    x_2 = myc.bldg_d+myc.bldg_w
-    y_1 = myc.bldg_d
-    y_2 = myc.bldg_d+myc.bldg_w
-    z_1 = 0
-    z_2 = myc.bldg_h
+    if myc.plot_bldg_as_wedge:
+        rad = np.linspace(myc.bldg_d, myc.bldg_d + myc.bldg_w, 2)
+        phi = np.linspace(0, 2*np.pi, 50)
+        alt = np.linspace(0, myc.bldg_h, 2)
 
-    x_a = [x_1, x_2]
-    y_a = [y_1, y_2]
-    z_a = [z_1, z_2]
+        r_msh, p_msh = np.meshgrid(rad, phi)
+        alt_zero = np.zeros(r_msh.shape)
+        alt_high = myc.bldg_h*np.ones(r_msh.shape)
 
-    x_1, y_1 = np.meshgrid(x_a, y_a)
-    x_2, z_2 = np.meshgrid(x_a, z_a)
-    y_3, z_3 = np.meshgrid(y_a, z_a)
+        x_flat = myc.tow_x + r_msh*np.cos(p_msh)
+        y_flat = myc.tow_y + r_msh*np.sin(p_msh)
 
-    s_1 = [x_1, y_1, np.ones(x_1.shape)*z_a[0]]
-    s_2 = [x_1, y_1, np.ones(x_1.shape)*z_a[-1]]
-    s_3 = [x_2, np.ones(x_2.shape)*y_a[0], z_2]
-    s_4 = [x_2, np.ones(x_2.shape)*y_a[-1], z_2]
-    s_5 = [np.ones(y_3.shape)*x_a[0], y_3, z_3]
-    s_6 = [np.ones(y_3.shape)*x_a[-1], y_3, z_3]
-    s_s = [s_1, s_2, s_3, s_4, s_5, s_6]
+        p_wall, z_wall = np.meshgrid(phi, alt)
+        rad_in = myc.bldg_d*np.ones(p_wall.shape)
+        rad_out = (myc.bldg_d+myc.bldg_w)*np.ones(p_wall.shape)
 
-    # Plot the surface.
-    for item in s_s:
-        my_ax.plot_surface(*item, color="b", alpha=0.1, rcount=1, ccount=1,
-                           lw=0, antialiased=False)
+        x_in = myc.tow_x + rad_in*np.cos(p_wall)
+        y_in = myc.tow_y + rad_in*np.sin(p_wall)
+
+        x_out = myc.tow_x + rad_out*np.cos(p_wall)
+        y_out = myc.tow_y + rad_out*np.sin(p_wall)
+
+        my_ax.plot_surface(x_flat, y_flat, alt_zero, color="b", alpha=0.1,
+                           rcount=1, ccount=1, lw=0, antialiased=False)
+        my_ax.plot_surface(x_flat, y_flat, alt_high, color="b", alpha=0.1,
+                           rcount=1, ccount=1, lw=0, antialiased=False)
+        my_ax.plot_surface(x_in, y_in, z_wall, color="b", alpha=0.1,
+                           rcount=1, ccount=10, lw=0, antialiased=False)
+        my_ax.plot_surface(x_out, y_out, z_wall, color="b", alpha=0.1,
+                           rcount=1, ccount=10, lw=0, antialiased=False)
+
+    else:
+        x_1 = myc.tow_x + myc.bldg_d
+        x_2 = myc.tow_x + myc.bldg_d + myc.bldg_w
+        y_1 = myc.tow_y + myc.bldg_d
+        y_2 = myc.tow_y + myc.bldg_d + myc.bldg_w
+        z_1 = 0
+        z_2 = myc.bldg_h
+
+        x_a = [x_1, x_2]
+        y_a = [y_1, y_2]
+        z_a = [z_1, z_2]
+
+        x_1, y_1 = np.meshgrid(x_a, y_a)
+        x_2, z_2 = np.meshgrid(x_a, z_a)
+        y_3, z_3 = np.meshgrid(y_a, z_a)
+
+        s_1 = [x_1, y_1, np.ones(x_1.shape)*z_a[0]]
+        s_2 = [x_1, y_1, np.ones(x_1.shape)*z_a[-1]]
+        s_3 = [x_2, np.ones(x_2.shape)*y_a[0], z_2]
+        s_4 = [x_2, np.ones(x_2.shape)*y_a[-1], z_2]
+        s_5 = [np.ones(y_3.shape)*x_a[0], y_3, z_3]
+        s_6 = [np.ones(y_3.shape)*x_a[-1], y_3, z_3]
+        s_s = [s_1, s_2, s_3, s_4, s_5, s_6]
+
+        # Plot the surface.
+        for item in s_s:
+            my_ax.plot_surface(*item, color="b", alpha=0.1, rcount=1, ccount=1,
+                               lw=0, antialiased=False)
 
 
 def plot_sect_hist(my_ax, myc):
@@ -673,7 +713,7 @@ def plot_footprint_hist(my_ax, myc):
                                myc.fix_ang_rad[i],
                                myc.sect_passed_2d[i, j, 4],
                                False)
-    print()
+    # print()
 
 
 def set_axes_equal(my_ax, myc):
