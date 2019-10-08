@@ -5,6 +5,7 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
+from matplotlib.text import Text
 from matplotlib.patches import Circle
 from matplotlib.widgets import Slider, RadioButtons
 from mpl_toolkits.mplot3d import axes3d
@@ -62,7 +63,7 @@ class Crane(object):
         self.plot_footprint_hist = False
         self.plot_sect_hist = False
         self.plot_bldg = True
-        self.plot_bldg_as_wedge = False
+        self.plot_bldg_as_wedge = True
 
         # Building characteristics
         self.bldg_h = 0
@@ -493,6 +494,7 @@ def plot_all(my_ax, myc, msh_p, cam_p, jt_p, cur_phi):
     # Plot cameras
     for i, item in enumerate(cam_p):
         # Plot current footprint
+        sca = False
         if myc.plot_cur_footprint:
             sca = plot_footprint(my_ax, myc, item, cur_phi, myc.fix_ang_rad[i],
                                  colr="g", alp=0.3, sc_size=20)
@@ -781,6 +783,25 @@ def set_axes_equal(my_ax, myc):
     my_ax.set_ylim3d([y_middle - plot_radius, y_middle + plot_radius])
     my_ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
 
+    my_ax.text2D(1.32, 0.65, "Keyboard commands", fontweight="bold",
+                 ma="right", transform=my_ax.transAxes)
+    my_ax.text2D(1, 0.10,
+                 """left/right: modify azimuthal angle
+                 up/down: modify polar angle
+                 Y/X: modify selected cam\'s relative position
+                 y/x: modify selected cam\'s fixed bracket angle
+                 v/b: modify max tower-cam footprint distance
+                 n/m: modify building height
+                 ctrl+n/ctrl+m: modify building\'s distance from tower
+                 alt+n/alt+m: modify building\'s width
+                 h: toggle current footprint
+                 H: toggle sector history
+                 j: toggle footprint history
+                 k: toggle building
+                 K: toggle building shape""",
+                 linespacing=3,
+                 ma="right",
+                 transform=my_ax.transAxes)
 
 if __name__ == '__main__':
     main()
