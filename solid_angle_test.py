@@ -97,7 +97,7 @@ def main():
     s_w = 0.15
     s_h = 0.01
     s_l = 0.15
-    s_u = 0.4
+    s_u = 0.45
     s_uk = 0.05
 
     # Defining plot area and widgets
@@ -122,6 +122,11 @@ def main():
     axtheta = plt.axes([s_l, s_u, s_w, s_h])
     sthet = Slider(axtheta, 'Polar angle (theta)', theta_l[0], theta_l[-1],
                    valinit=theta_init, valstep=1, color=scol, alpha=salp)
+
+    s_u -= s_uk
+    axcamk = plt.axes([s_l, s_u, s_w, s_h])
+    scamk = Slider(axcamk, 'Selected cam\'s relative distance', 0.1, 0.9,
+                   valinit=myc.k_cams[0], valstep=0.05, color=scol, alpha=salp)
 
     s_u -= s_uk
     axfix = plt.axes([s_l, s_u, s_w, s_h])
@@ -193,18 +198,33 @@ def main():
     # Initial plot of the situation
     plot_all(my_ax, myc, msh_p, cam_p, jt_p, phi_init)
 
+    def update_cam_a(val=None):
+        myc.cur_cam = int(rcams.value_selected.split()[1]) - 1
+        scamk.set_val(myc.k_cams[myc.cur_cam])
+        sfix.set_val(myc.fix_ang[myc.cur_cam])
+        update()
+
+    def update_cam_k(val=None):
+        old_val = myc.k_cams[myc.cur_cam]
+        myc.k_cams[myc.cur_cam] = scamk.val
+        for i in range(myc.n_sect_2d):
+            myc.sect_passed_2d[myc.cur_cam][i][:3] = (
+                scamk.val * myc.sect_passed_2d[myc.cur_cam][i][:3]/old_val)
+        update()
+
+    def update_cam_f(val=None):
+        myc.fix_ang[myc.cur_cam] = sfix.val
+        myc.fix_ang_rad[myc.cur_cam] = np.radians(sfix.val)
+        update()
+
     # For when a value is changed (either with widget or key presses)
-    def update(val):
+    def update(val=None):
         """Update object instance and plot as per widget status
 
         Args:
             val (widget value): Attribute to access values
         """
         my_ax.clear()
-
-        # In case camera's fixed angle or bldg height is changed
-        myc.fix_ang[myc.cur_cam] = sfix.val
-        myc.fix_ang_rad[myc.cur_cam] = np.radians(sfix.val)
 
         myc.bldg_h = sbldh.val
         myc.bldg_d = sbldd.val
@@ -260,15 +280,17 @@ def main():
 
         # Redraw everything
         plot_all(my_ax, myc, msh_p, cam_p, jt_p, new_phi)
+        set_axes_equal(my_ax, myc)
         fig.canvas.draw_idle()
 
     # Initial update now that everything is set up
-    update(None)
+    update()
 
-    rcams.on_clicked(update)
+    rcams.on_clicked(update_cam_a)
     sphi.on_changed(update)
     sthet.on_changed(update)
-    sfix.on_changed(update)
+    scamk.on_changed(update_cam_k)
+    sfix.on_changed(update_cam_f)
     sbldh.on_changed(update)
     sbldd.on_changed(update)
     sbldw.on_changed(update)
@@ -302,6 +324,11 @@ def main():
         elif event.key == 'down':  # Polar angle increase / Luffing decrease
             check_slider_min_max(sthet, mul=5)
 
+        elif event.key == 'Y':  # Camera relative position decrease
+            check_slider_min_max(scamk, '-')
+        elif event.key == 'X':  # Camera relative position increase
+            check_slider_min_max(scamk)
+
         elif event.key == 'y':  # Fixed camera bracket angle decrease
             check_slider_min_max(sfix, '-')
         elif event.key == 'x':  # Fixed camera bracket angle increase
@@ -329,7 +356,7 @@ def main():
 
         elif event.key == 'c':  # Clears all sectors' history
             myc.clear_sect_passed()
-            update(None)
+            update()
 
         elif event.key == 'h':  # Hides / Shows current footprint
             hide_show_plot(myc, "myc.plot_cur_footprint")
@@ -338,19 +365,19 @@ def main():
         elif event.key == 'j':  # Hides / Shows footprints' history
             hide_show_plot(myc, "myc.plot_footprint_hist")
         elif event.key == 'k':  # Hides / Shows building
-            hide_show_plot(myc, "myc.plot_bldg")        
+            hide_show_plot(myc, "myc.plot_bldg")
         elif event.key == 'K':  # Toggles between wedge and polygon bldg
             hide_show_plot(myc, "myc.plot_bldg_as_wedge")
 
         elif event.key == 't':  # Go to top view
             my_ax.view_init(90, 0)
-            update(None)
+            update()
         elif event.key == 'f':  # Go to front view
             my_ax.view_init(0, 0)
-            update(None)
+            update()
         elif event.key == 'o':  # Go to orthogonal view
             my_ax.view_init(45, 0)
-            update(None)
+            update()
 
         # Change current cam (for sliders) with keyboard numbers 1 to 9
         elif len(event.key) == 1:
@@ -358,9 +385,10 @@ def main():
                 myc.cur_cam = myc.n_cams-1 if int(
                     event.key) % myc.n_cams == 0 else(
                         int(event.key) % myc.n_cams - 1)
-                sfix.set_val(myc.fix_ang[myc.cur_cam])
-                rcams.set_active(myc.cur_cam)
 
+                rcams.set_active(myc.cur_cam)
+                update_cam_f()
+                update_cam_k()
         else:
             if ((not event.key == 'control'
                  and not event.key == 'alt'
@@ -391,7 +419,7 @@ def main():
             plot_bool (string): Argument
         """
         exec(plot_bool + " = not " + plot_bool)
-        update(None)
+        update()
 
     fig.canvas.mpl_connect('key_press_event', press)
 
@@ -470,7 +498,7 @@ def plot_all(my_ax, myc, msh_p, cam_p, jt_p, cur_phi):
                                  colr="g", alp=0.3, sc_size=20)
 
         my_ax.scatter(*item, s=50, c="green" if sca else "red")
-    # print()
+    print()
 
     # Plot footprint history
     if myc.plot_footprint_hist:
@@ -713,7 +741,7 @@ def plot_footprint_hist(my_ax, myc):
                                myc.fix_ang_rad[i],
                                myc.sect_passed_2d[i, j, 4],
                                False)
-    # print()
+    print()
 
 
 def set_axes_equal(my_ax, myc):
