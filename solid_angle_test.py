@@ -5,7 +5,7 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
-from matplotlib.text import Text
+from matplotlib._png import read_png
 from matplotlib.patches import Circle
 from matplotlib.widgets import Slider, RadioButtons
 from mpl_toolkits.mplot3d import axes3d
@@ -37,8 +37,8 @@ class Crane(object):
         self.hfov_h = 0.5*64.2
 
         # Fixed angle of luffing bracket for camera
-        self.n_cams = 4
-        self.k_cams = np.linspace(0.1, 0.9, self.n_cams)
+        self.n_cams = 2
+        self.k_cams = np.linspace(0.0, 1.0, self.n_cams)
         self.fix_ang = 30*np.ones(self.n_cams)
         self.fix_ang_rad = np.radians(self.fix_ang)
         self.cur_cam = 0
@@ -66,11 +66,13 @@ class Crane(object):
         self.plot_bldg_as_wedge = True
 
         # Building characteristics
-        self.bldg_h = 0
-        self.bldg_d = 0
-        self.bldg_w = 0
+        self.bldg_h = 40
+        self.bldg_d = 21
+        self.bldg_w = 55
 
         self.cam_center_max_r = 2*self.jib_l//10*10
+
+        self.my_site = read_png('site.png')
 
     def clear_sect_passed(self):
         """Clears history of which sectors have already been passed through
@@ -103,7 +105,8 @@ def main():
 
     # Defining plot area and widgets
     fig = plt.figure(figsize=(6, 6))
-    my_ax = fig.add_subplot(111, projection='3d', proj_type='ortho')
+    my_ax = fig.add_subplot(111, projection='3d', proj_type='ortho',
+                            label='my ax')
 
     scol = "blue"
     salp = 0.2
@@ -126,8 +129,9 @@ def main():
 
     s_u -= s_uk
     axcamk = plt.axes([s_l, s_u, s_w, s_h])
-    scamk = Slider(axcamk, 'Selected cam\'s relative distance', 0.1, 0.9,
-                   valinit=myc.k_cams[0], valstep=0.05, color=scol, alpha=salp)
+    scamk = Slider(axcamk, 'Selected cam\'s relative distance', 0, 1,
+                   valinit=myc.k_cams[0], valstep=0.5/myc.jib_l, color=scol,
+                   alpha=salp)
 
     s_u -= s_uk
     axfix = plt.axes([s_l, s_u, s_w, s_h])
@@ -142,12 +146,12 @@ def main():
     s_u -= s_uk
     axbldgd = plt.axes([s_l, s_u, s_w, s_h])
     sbldd = Slider(axbldgd, 'Building distance', 0, myc.jib_l,
-                   valinit=myc.bldg_d, valstep=5, color=scol, alpha=salp)
+                   valinit=myc.bldg_d, valstep=1, color=scol, alpha=salp)
 
     s_u -= s_uk
     axbldgw = plt.axes([s_l, s_u, s_w, s_h])
     sbldw = Slider(axbldgw, 'Building width', 0, 2*myc.jib_l,
-                   valinit=myc.bldg_w, valstep=5, color=scol, alpha=salp)
+                   valinit=myc.bldg_w, valstep=1, color=scol, alpha=salp)
 
     s_u -= s_uk
     axmaxd = plt.axes([s_l, s_u, s_w, s_h])
@@ -226,6 +230,11 @@ def main():
             val (widget value): Attribute to access values
         """
         my_ax.clear()
+
+        my_ax.text2D(
+            0.1, 0.24, ('(' + str(round(myc.k_cams[myc.cur_cam]*myc.jib_l, 2))
+                        + '[m])'),
+            ma="right", transform=my_ax.transAxes)
 
         myc.bldg_h = sbldh.val
         myc.bldg_d = sbldd.val
@@ -775,6 +784,16 @@ def set_axes_equal(my_ax, myc):
     z_range = abs(z_limits[1] - z_limits[0])
     z_middle = np.mean(z_limits)
 
+    """
+    x_img, y_img = (
+        np.meshgrid(
+            np.arange(-90, 90, 180./myc.my_site.shape[0]),
+            np.arange(-90, 90, 180./myc.my_site.shape[1])))
+
+    my_ax.plot_surface(x_img, y_img, np.zeros(x_img.shape), rstride=10,
+                       cstride=10, facecolors=myc.my_site)
+    """
+
     # The plot bounding box is a sphere in the sense of the infinity
     # norm, hence I call half the max range the plot radius.
     plot_radius = 0.5*max([x_range, y_range, z_range])
@@ -802,6 +821,7 @@ def set_axes_equal(my_ax, myc):
                  linespacing=3,
                  ma="right",
                  transform=my_ax.transAxes)
+
 
 if __name__ == '__main__':
     main()
