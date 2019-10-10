@@ -2,6 +2,7 @@
 Does an interactive 3D visualization of a point moving in spherical coordinates
 """
 import sys
+import yaml
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -19,33 +20,65 @@ class Crane(object):
     Args:
         object (Crane): Physical dimensions and visualization parameters
     """
-    def __init__(self):
-        # Characteristics from crane itself
-        self.tow_x = 0.
-        self.tow_y = 0.
-        self.tow_z = 0.
+    def __init__(self, d_conf=None):
+        if d_conf == {}:
+            # Characteristics from crane itself
+            self.tow_x = 0.
+            self.tow_y = 0.
+            self.tow_z = 0.
+            self.tow_h = 43.6  # 60
+            self.jib_l = 61.07  # 68
 
-        self.tow_h = 43.6  # 60
-        self.jib_l = 61.07  # 68
+            # Camera characteristics
+            self.n_cams = 4
+            self.k_cams = np.linspace(0.0, 1.0, self.n_cams+2)[1:-1]
+            self.fix_ang = 30*np.ones(self.n_cams)
+            self.cam_center_max_r = 2*self.jib_l//10*10
 
-        self.luf_ang = 0
-        self.luf_ang_rad = 0
+            # Capture characteristics
+            self.n_sect_2d = 10
+            self.n_sect_3d = 4
+
+            # Building characteristics
+            self.bldg_h = 40
+            self.bldg_d = 0
+            self.bldg_w = 55
+            self.bldg_x = -34
+            self.bldg_y = 34
+
+        else:
+            self.tow_x = d_conf.get('crane').get('tow_x')
+            self.tow_y = d_conf.get('crane').get('tow_y')
+            self.tow_z = d_conf.get('crane').get('tow_z')
+            self.tow_h = d_conf.get('crane').get('tow_h')
+            self.jib_l = d_conf.get('crane').get('jib_l')
+
+            self.n_cams = d_conf.get('cams').get('n_cams')
+            self.k_cams = np.array(d_conf.get('cams').get('k_cams'))/self.jib_l
+            self.fix_ang = np.array(d_conf.get('cams').get('fix_ang'))
+            self.cam_center_max_r = d_conf.get('cams').get('cam_center_max_r')
+
+            self.n_sect_2d = d_conf.get('capture').get('n_sect_2d')
+            self.n_sect_3d = d_conf.get('capture').get('n_sect_3d')
+
+            self.bldg_h = d_conf.get('building').get('bldg_h')
+            self.bldg_d = d_conf.get('building').get('bldg_d')
+            self.bldg_w = d_conf.get('building').get('bldg_w')
+            self.bldg_x = d_conf.get('building').get('bldg_x')
+            self.bldg_y = d_conf.get('building').get('bldg_y')
+
+        self.luf_ang = 85
+        self.luf_ang_rad = np.radians(self.luf_ang)
+        self.fix_ang_rad = np.radians(self.fix_ang)
 
         # FOV characteristics from camera
         self.hfov_v = 0.5*45.4
         self.hfov_h = 0.5*64.2
 
-        # Fixed angle of luffing bracket for camera
-        self.n_cams = 2
-        self.k_cams = np.linspace(0.0, 1.0, self.n_cams+2)[1:-1]
-        self.fix_ang = 30*np.ones(self.n_cams)
-        self.fix_ang_rad = np.radians(self.fix_ang)
         self.cur_cam = 0
 
         # Slices' / Sectors' characteristics
-        self.n_sect_2d = 10
         self.i_sect_2d = 360./self.n_sect_2d
-        self.n_sect_3d = 4
         self.i_sect_3d = 90./self.n_sect_3d
 
         self.n_wireframe = 3
@@ -63,14 +96,6 @@ class Crane(object):
         self.plot_sect_hist = False
         self.plot_bldg = True
         self.plot_bldg_as_wedge = True
-        self.plot_bldg_centered = True
-
-        # Building characteristics
-        self.bldg_h = 40
-        self.bldg_d = 21
-        self.bldg_w = 55
-
-        self.cam_center_max_r = 2*self.jib_l//10*10
 
     def clear_sect_passed(self):
         """Clears history of which sectors have already been passed through
@@ -84,7 +109,11 @@ class Crane(object):
 def main():
     """Does a 3D visualization of a point moving in spherical coordinates
     """
-    myc = Crane()
+    d_conf = {}
+    if len(sys.argv) > 1:
+        with open(str(sys.argv[1]), 'r') as stream:
+            d_conf = yaml.load(stream)
+    myc = Crane(d_conf)
 
     # Definining list of sectors
     phi_l = np.linspace(0., 360., myc.n_sect_2d+1) - 360./(2*myc.n_sect_2d)
@@ -92,13 +121,13 @@ def main():
 
     # Initial config of camera
     r_s = myc.jib_l
-    phi_init = 90  # 60
-    theta_init = 90  # 33.75
+    phi_init = 135  # 90  # 60
+    theta_init = 90-myc.luf_ang  # 33.75
 
     s_w = 0.15
     s_h = 0.01
     s_l = 0.15
-    s_u = 0.45
+    s_u = 0.55
     s_uk = 0.05
 
     # Defining plot area and widgets
@@ -137,14 +166,15 @@ def main():
                   valinit=myc.fix_ang[0], valstep=10, color=scol, alpha=salp)
 
     s_u -= s_uk
-    axbldgh = plt.axes([s_l, s_u, s_w, s_h])
-    sbldh = Slider(axbldgh, 'Building height', myc.tow_z, myc.tow_z+myc.tow_h,
-                   valinit=myc.bldg_h, valstep=10, color=scol, alpha=salp)
+    axmaxd = plt.axes([s_l, s_u, s_w, s_h])
+    smaxd = Slider(axmaxd, 'Maximum distance from center', 0,
+                   2*myc.jib_l//10*10, valinit=1.1*myc.jib_l//10*10, valstep=5,
+                   color=scol, alpha=salp)
 
     s_u -= s_uk
-    axbldgd = plt.axes([s_l, s_u, s_w, s_h])
-    sbldd = Slider(axbldgd, 'Building distance', 0, myc.jib_l,
-                   valinit=myc.bldg_d, valstep=1, color=scol, alpha=salp)
+    axbldgh = plt.axes([s_l, s_u, s_w, s_h])
+    sbldh = Slider(axbldgh, 'Building height', 0, myc.tow_z+myc.tow_h,
+                   valinit=myc.bldg_h, valstep=10, color=scol, alpha=salp)
 
     s_u -= s_uk
     axbldgw = plt.axes([s_l, s_u, s_w, s_h])
@@ -152,9 +182,20 @@ def main():
                    valinit=myc.bldg_w, valstep=1, color=scol, alpha=salp)
 
     s_u -= s_uk
-    axmaxd = plt.axes([s_l, s_u, s_w, s_h])
-    smaxd = Slider(axmaxd, 'Maximum distance from center', 0,
-                   2*myc.jib_l//10*10, valinit=1.1*myc.jib_l//10*10, valstep=5,
+    axbldgd = plt.axes([s_l, s_u, s_w, s_h])
+    sbldd = Slider(axbldgd, 'Building distance (radial)', 0, myc.jib_l,
+                   valinit=myc.bldg_d, valstep=1, color=scol, alpha=salp)
+
+    s_u -= s_uk
+    axbldgx = plt.axes([s_l, s_u, s_w, s_h])
+    sbldx = Slider(axbldgx, 'Building x-offset', np.floor(-myc.jib_l),
+                   np.ceil(myc.jib_l), valinit=myc.bldg_x, valstep=1,
+                   color=scol, alpha=salp)
+
+    s_u -= s_uk
+    axbldgy = plt.axes([s_l, s_u, s_w, s_h])
+    sbldy = Slider(axbldgy, 'Building y-offset', np.floor(-myc.jib_l),
+                   np.ceil(myc.jib_l), valinit=myc.bldg_y, valstep=1,
                    color=scol, alpha=salp)
 
     # Defining current sector camera is in
@@ -237,6 +278,8 @@ def main():
         myc.bldg_h = sbldh.val
         myc.bldg_d = sbldd.val
         myc.bldg_w = sbldw.val
+        myc.bldg_x = sbldx.val
+        myc.bldg_y = sbldy.val
         myc.cam_center_max_r = smaxd.val
 
         # Re-determine current slice / sector and its coordinates
@@ -302,6 +345,8 @@ def main():
     sbldh.on_changed(update)
     sbldd.on_changed(update)
     sbldw.on_changed(update)
+    sbldx.on_changed(update)
+    sbldy.on_changed(update)
     smaxd.on_changed(update)
 
     my_ax.view_init(45, 0)
@@ -362,6 +407,16 @@ def main():
         elif event.key == 'alt+m':  # Building width increase
             check_slider_min_max(sbldw)
 
+        elif event.key == 'alt+up':  # Building x-offset decrease
+            check_slider_min_max(sbldx, '-')
+        elif event.key == 'alt+down':  # Building x-offset increase
+            check_slider_min_max(sbldx)
+
+        elif event.key == 'alt+left':  # Building y-offset decrease
+            check_slider_min_max(sbldy, '-')
+        elif event.key == 'alt+right':  # Building y-offset increase
+            check_slider_min_max(sbldy)
+
         elif event.key == 'c':  # Clears all sectors' history
             myc.clear_sect_passed()
             update()
@@ -376,8 +431,6 @@ def main():
             hide_show_plot(myc, "myc.plot_bldg")
         elif event.key == 'alt+h':  # Toggles between wedge and polygon bldg
             hide_show_plot(myc, "myc.plot_bldg_as_wedge")
-        elif event.key == 'ctrl+alt+h':
-            hide_show_plot(myc, "myc.plot_bldg_centered")
 
         elif event.key == 't':  # Go to top view
             my_ax.view_init(90, 0)
@@ -400,7 +453,7 @@ def main():
                 update_cam_f()
                 update_cam_k()
         else:
-            if ((not event.key == 'control'
+            if ((not event.key == 'ctrl'
                  and not event.key == 'alt'
                  and not event.key == 'shift')):
                 print(event.key)
@@ -484,6 +537,7 @@ def plot_all(my_ax, myc, msh_p, cam_p, jt_p, cur_phi):
         jt_p (float): Jib tip point's coordinates
         cur_phi (float): Current azimuthal angle [deg]
     """
+    print("Re-plotting with latest values")
     # Plots current sector as a wireframe
     if myc.plot_sect_hist:
         my_ax.plot_wireframe(*msh_p, colors="green")
@@ -506,20 +560,21 @@ def plot_all(my_ax, myc, msh_p, cam_p, jt_p, cur_phi):
         sca = False
         if myc.plot_cur_footprint:
             sca = plot_footprint(my_ax, myc, item, cur_phi, myc.fix_ang_rad[i],
-                                 colr="g", alp=0.3, sc_size=20)
+                                 i, False, colr="g", alp=0.3, sc_size=20)
 
         my_ax.scatter(*item, s=50, c="green" if sca else "red")
-    print()
 
     # Plot footprint history
     if myc.plot_footprint_hist:
         plot_footprint_hist(my_ax, myc)
 
     set_axes_equal(my_ax, myc)
+    print()
 
 
-def plot_footprint(my_ax, myc, cam_p, cur_phi, fix_ang_rad, luf_ang_rad=None,
-                   draw_trace=True, colr="black", alp=0.1, sc_size=10):
+def plot_footprint(my_ax, myc, cam_p, cur_phi, fix_ang_rad, cam_num, bool_hist,
+                   luf_ang_rad=None, draw_trace=True, colr="black", alp=0.1,
+                   sc_size=10):
     """Plots the footprint of a single camera
 
     Args:
@@ -605,8 +660,14 @@ def plot_footprint(my_ax, myc, cam_p, cur_phi, fix_ang_rad, luf_ang_rad=None,
         my_ax.scatter(pxs, pys, pzs, s=sc_size, c=colr, alpha=alp)
         my_ax.plot_trisurf(pxs, pys, pzs, color=colr, alpha=alp, shade=False)
 
-        print("{:.1f}[m^2]".format(
-            get_polygon_area(np.array(pxs[1:]), np.array(pys[1:]), 4)))
+        if bool_hist:
+            print("Area of historical footprint of cam {}: {:.1f}[m^2]".format(
+                cam_num, get_polygon_area(
+                    np.array(pxs[1:]), np.array(pys[1:]), 4)))
+        else:
+            print("Area of current footprint for cam {}: {:.1f}[m^2]".format(
+                cam_num, get_polygon_area(
+                    np.array(pxs[1:]), np.array(pys[1:]), 4)))
 
     return sca
 
@@ -640,7 +701,7 @@ def plot_bldg(my_ax, myc):
         myc (Crane): Instance containing all physical parameters and history
     """
     if myc.plot_bldg_as_wedge:
-        rad = np.linspace(myc.bldg_d, myc.bldg_d + myc.bldg_w, 2)
+        rad = 0.5*np.linspace(myc.bldg_d, myc.bldg_d + myc.bldg_w, 2)
         phi = np.linspace(0, 2*np.pi, 50)
         alt = np.linspace(0, myc.bldg_h, 2)
 
@@ -649,25 +710,17 @@ def plot_bldg(my_ax, myc):
         alt_high = myc.bldg_h*np.ones(r_msh.shape)
 
         p_wall, z_wall = np.meshgrid(phi, alt)
-        rad_in = myc.bldg_d*np.ones(p_wall.shape)
-        rad_out = (myc.bldg_d+myc.bldg_w)*np.ones(p_wall.shape)
+        rad_in = 0.5*myc.bldg_d*np.ones(p_wall.shape)
+        rad_out = 0.5*(myc.bldg_d+myc.bldg_w)*np.ones(p_wall.shape)
 
-        x_flat = myc.tow_x + r_msh*np.cos(p_msh)
-        y_flat = myc.tow_y + r_msh*np.sin(p_msh)
+        x_flat = myc.tow_x + r_msh*np.cos(p_msh) + myc.bldg_x
+        y_flat = myc.tow_y + r_msh*np.sin(p_msh) + myc.bldg_y
 
-        x_in = myc.tow_x + rad_in*np.cos(p_wall)
-        y_in = myc.tow_y + rad_in*np.sin(p_wall)
+        x_in = myc.tow_x + rad_in*np.cos(p_wall) + myc.bldg_x
+        y_in = myc.tow_y + rad_in*np.sin(p_wall) + myc.bldg_y
 
-        x_out = myc.tow_x + rad_out*np.cos(p_wall)
-        y_out = myc.tow_y + rad_out*np.sin(p_wall)
-
-        if not myc.plot_bldg_centered:
-            x_flat += myc.bldg_d
-            y_flat += myc.bldg_d
-            x_in += myc.bldg_d
-            y_in += myc.bldg_d
-            x_out += myc.bldg_d
-            y_out += myc.bldg_d
+        x_out = myc.tow_x + rad_out*np.cos(p_wall) + myc.bldg_x
+        y_out = myc.tow_y + rad_out*np.sin(p_wall) + myc.bldg_y
 
         my_ax.plot_surface(x_flat, y_flat, alt_zero, color="b", alpha=0.1,
                            rcount=1, ccount=1, lw=0, antialiased=False)
@@ -679,17 +732,10 @@ def plot_bldg(my_ax, myc):
                            rcount=1, ccount=10, lw=0, antialiased=False)
 
     else:
-        if myc.plot_bldg_centered:
-            x_1 = myc.tow_x - 0.5*myc.bldg_w
-            x_2 = myc.tow_x + 0.5*myc.bldg_w
-            y_1 = myc.tow_y - 0.5*myc.bldg_w
-            y_2 = myc.tow_y + 0.5*myc.bldg_w
-
-        else:
-            x_1 = myc.tow_x + myc.bldg_d
-            x_2 = myc.tow_x + myc.bldg_d + myc.bldg_w
-            y_1 = myc.tow_y + myc.bldg_d
-            y_2 = myc.tow_y + myc.bldg_d + myc.bldg_w
+        x_1 = myc.tow_x - 0.5*myc.bldg_w + myc.bldg_x
+        x_2 = myc.tow_x + 0.5*myc.bldg_w + myc.bldg_x
+        y_1 = myc.tow_y - 0.5*myc.bldg_w + myc.bldg_y
+        y_2 = myc.tow_y + 0.5*myc.bldg_w + myc.bldg_y
 
         z_1 = 0
         z_2 = myc.bldg_h
@@ -754,6 +800,7 @@ def plot_footprint_hist(my_ax, myc):
         my_ax (plt figure subplot): Where sectors should be plotted
         myc (Crane): Instance containing all physical parameters and history
     """
+    print(myc.sect_passed_2d)
     for i in range(myc.n_cams):
         for j in range(myc.sect_passed_2d.shape[1]):
             if myc.sect_passed_2d[i][j].any():
@@ -766,6 +813,8 @@ def plot_footprint_hist(my_ax, myc):
                                cam_pft,
                                myc.sect_passed_2d[i, j, 3],
                                myc.fix_ang_rad[i],
+                               i,
+                               True,
                                myc.sect_passed_2d[i, j, 4],
                                False)
     print()
