@@ -5,7 +5,6 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
-from matplotlib._png import read_png
 from matplotlib.patches import Circle
 from matplotlib.widgets import Slider, RadioButtons
 from mpl_toolkits.mplot3d import axes3d
@@ -38,7 +37,7 @@ class Crane(object):
 
         # Fixed angle of luffing bracket for camera
         self.n_cams = 2
-        self.k_cams = np.linspace(0.0, 1.0, self.n_cams)
+        self.k_cams = np.linspace(0.0, 1.0, self.n_cams+2)[1:-1]
         self.fix_ang = 30*np.ones(self.n_cams)
         self.fix_ang_rad = np.radians(self.fix_ang)
         self.cur_cam = 0
@@ -64,6 +63,7 @@ class Crane(object):
         self.plot_sect_hist = False
         self.plot_bldg = True
         self.plot_bldg_as_wedge = True
+        self.plot_bldg_centered = True
 
         # Building characteristics
         self.bldg_h = 40
@@ -71,8 +71,6 @@ class Crane(object):
         self.bldg_w = 55
 
         self.cam_center_max_r = 2*self.jib_l//10*10
-
-        self.my_site = read_png('site.png')
 
     def clear_sect_passed(self):
         """Clears history of which sectors have already been passed through
@@ -374,10 +372,12 @@ def main():
             hide_show_plot(myc, "myc.plot_sect_hist")
         elif event.key == 'j':  # Hides / Shows footprints' history
             hide_show_plot(myc, "myc.plot_footprint_hist")
-        elif event.key == 'k':  # Hides / Shows building
+        elif event.key == 'ctrl+h':  # Hides / Shows building
             hide_show_plot(myc, "myc.plot_bldg")
-        elif event.key == 'K':  # Toggles between wedge and polygon bldg
+        elif event.key == 'alt+h':  # Toggles between wedge and polygon bldg
             hide_show_plot(myc, "myc.plot_bldg_as_wedge")
+        elif event.key == 'ctrl+alt+h':
+            hide_show_plot(myc, "myc.plot_bldg_centered")
 
         elif event.key == 't':  # Go to top view
             my_ax.view_init(90, 0)
@@ -648,18 +648,26 @@ def plot_bldg(my_ax, myc):
         alt_zero = np.zeros(r_msh.shape)
         alt_high = myc.bldg_h*np.ones(r_msh.shape)
 
-        x_flat = myc.tow_x + r_msh*np.cos(p_msh)
-        y_flat = myc.tow_y + r_msh*np.sin(p_msh)
-
         p_wall, z_wall = np.meshgrid(phi, alt)
         rad_in = myc.bldg_d*np.ones(p_wall.shape)
         rad_out = (myc.bldg_d+myc.bldg_w)*np.ones(p_wall.shape)
+
+        x_flat = myc.tow_x + r_msh*np.cos(p_msh)
+        y_flat = myc.tow_y + r_msh*np.sin(p_msh)
 
         x_in = myc.tow_x + rad_in*np.cos(p_wall)
         y_in = myc.tow_y + rad_in*np.sin(p_wall)
 
         x_out = myc.tow_x + rad_out*np.cos(p_wall)
         y_out = myc.tow_y + rad_out*np.sin(p_wall)
+
+        if not myc.plot_bldg_centered:
+            x_flat += myc.bldg_d
+            y_flat += myc.bldg_d
+            x_in += myc.bldg_d
+            y_in += myc.bldg_d
+            x_out += myc.bldg_d
+            y_out += myc.bldg_d
 
         my_ax.plot_surface(x_flat, y_flat, alt_zero, color="b", alpha=0.1,
                            rcount=1, ccount=1, lw=0, antialiased=False)
@@ -671,10 +679,18 @@ def plot_bldg(my_ax, myc):
                            rcount=1, ccount=10, lw=0, antialiased=False)
 
     else:
-        x_1 = myc.tow_x + myc.bldg_d
-        x_2 = myc.tow_x + myc.bldg_d + myc.bldg_w
-        y_1 = myc.tow_y + myc.bldg_d
-        y_2 = myc.tow_y + myc.bldg_d + myc.bldg_w
+        if myc.plot_bldg_centered:
+            x_1 = myc.tow_x - 0.5*myc.bldg_w
+            x_2 = myc.tow_x + 0.5*myc.bldg_w
+            y_1 = myc.tow_y - 0.5*myc.bldg_w
+            y_2 = myc.tow_y + 0.5*myc.bldg_w
+
+        else:
+            x_1 = myc.tow_x + myc.bldg_d
+            x_2 = myc.tow_x + myc.bldg_d + myc.bldg_w
+            y_1 = myc.tow_y + myc.bldg_d
+            y_2 = myc.tow_y + myc.bldg_d + myc.bldg_w
+
         z_1 = 0
         z_2 = myc.bldg_h
 
@@ -784,16 +800,6 @@ def set_axes_equal(my_ax, myc):
     z_range = abs(z_limits[1] - z_limits[0])
     z_middle = np.mean(z_limits)
 
-    """
-    x_img, y_img = (
-        np.meshgrid(
-            np.arange(-90, 90, 180./myc.my_site.shape[0]),
-            np.arange(-90, 90, 180./myc.my_site.shape[1])))
-
-    my_ax.plot_surface(x_img, y_img, np.zeros(x_img.shape), rstride=10,
-                       cstride=10, facecolors=myc.my_site)
-    """
-
     # The plot bounding box is a sphere in the sense of the infinity
     # norm, hence I call half the max range the plot radius.
     plot_radius = 0.5*max([x_range, y_range, z_range])
@@ -816,8 +822,9 @@ def set_axes_equal(my_ax, myc):
                  h: toggle current footprint
                  H: toggle sector history
                  j: toggle footprint history
-                 k: toggle building
-                 K: toggle building shape""",
+                 ctrl+h: toggle building
+                 alt+h: toggle building shape
+                 ctrl+alt+h: toggle building center location""",
                  linespacing=3,
                  ma="right",
                  transform=my_ax.transAxes)
