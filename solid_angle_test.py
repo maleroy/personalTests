@@ -38,6 +38,7 @@ class Crane(object):
             # Capture characteristics
             self.n_sect_2d = 10
             self.n_sect_3d = 4
+            self.hist_2d_only = False
 
             # Building characteristics
             self.bldg_h = 40
@@ -60,6 +61,7 @@ class Crane(object):
 
             self.n_sect_2d = d_conf.get('capture').get('n_sect_2d')
             self.n_sect_3d = d_conf.get('capture').get('n_sect_3d')
+            self.hist_2d_only = d_conf.get('capture').get('hist_2d_only')
 
             self.bldg_h = d_conf.get('building').get('bldg_h')
             self.bldg_d = d_conf.get('building').get('bldg_d')
@@ -88,7 +90,8 @@ class Crane(object):
             (self.n_sect_2d, self.n_sect_3d), dtype=bool)
 
         self.sect_passed_2d = np.zeros((self.n_cams, self.n_sect_2d, 5))
-        self.sect_passed_3d = np.zeros((self.n_cams, self.n_sect_2d, self.n_sect_3d, 5))
+        self.sect_passed_3d = np.zeros(
+            (self.n_cams, self.n_sect_2d, self.n_sect_3d, 5))
         self.prev_2d_sect = -1*np.ones(self.n_cams)
         self.prev_3d_sect = -1*np.ones((self.n_cams, 2))
 
@@ -106,7 +109,8 @@ class Crane(object):
             (self.n_sect_2d, self.n_sect_3d), dtype=bool)
 
         self.sect_passed_2d = np.zeros((self.n_cams, self.n_sect_2d, 5))
-        self.sect_passed_3d = np.zeros((self.n_cams, self.n_sect_2d, self.n_sect_3d, 5))
+        self.sect_passed_3d = np.zeros(
+            (self.n_cams, self.n_sect_2d, self.n_sect_3d, 5))
         self.prev_2d_sect = -1*np.ones(self.n_cams)
         self.prev_3d_sect = -1*np.ones((self.n_cams, 2))
 
@@ -236,9 +240,12 @@ def main():
              and not p_i == myc.prev_2d_sect[i])):
             myc.sect_passed_2d[i][p_i] = [p_x, p_y, p_z, phi_init,
                                           myc.luf_ang_rad]
+            myc.prev_2d_sect[i] = p_i
+
+        if (((p_x**2+p_y**2) < myc.cam_center_max_r**2
+             and not set([p_i, t_i]) == set(myc.prev_3d_sect[i]))):
             myc.sect_passed_3d[i][p_i][t_i] = [p_x, p_y, p_z, phi_init,
                                                myc.luf_ang_rad]
-            myc.prev_2d_sect[i] = p_i
             myc.prev_3d_sect[i] = [p_i, t_i]
 
         p_x += myc.tow_x
@@ -264,7 +271,8 @@ def main():
                 scamk.val * myc.sect_passed_2d[myc.cur_cam][i][:3]/old_val)
             for j in range(myc.n_sect_3d):
                 myc.sect_passed_3d[myc.cur_cam][i][j][:3] = (
-                    scamk.val * myc.sect_passed_3d[myc.cur_cam][i][j][:3]/old_val)
+                    scamk.val * (
+                        myc.sect_passed_3d[myc.cur_cam][i][j][:3]/old_val))
         update()
 
     def update_cam_f(val=None):
@@ -332,9 +340,12 @@ def main():
                  and not p_i == myc.prev_2d_sect[i])):
                 myc.sect_passed_2d[i][p_i] = [p_x, p_y, p_z, new_phi,
                                               myc.luf_ang_rad]
+                myc.prev_2d_sect[i] = p_i
+
+            if (((p_x**2+p_y**2) < myc.cam_center_max_r**2
+                 and not set([p_i, t_i]) == set(myc.prev_3d_sect[i]))):
                 myc.sect_passed_3d[i][p_i][t_i] = [p_x, p_y, p_z, new_phi,
                                                    myc.luf_ang_rad]
-                myc.prev_2d_sect[i] = p_i
                 myc.prev_3d_sect[i] = [p_i, t_i]
 
             p_x += myc.tow_x
@@ -814,13 +825,14 @@ def plot_footprint_hist(my_ax, myc):
         my_ax (plt figure subplot): Where sectors should be plotted
         myc (Crane): Instance containing all physical parameters and history
     """
-    if False:
+    if myc.hist_2d_only:
         for i in range(myc.n_cams):
             for j in range(myc.sect_passed_2d.shape[1]):
                 if myc.sect_passed_2d[i][j].any():
                     cam_pft = [myc.sect_passed_2d[i, j, 0] + myc.tow_x,
                                myc.sect_passed_2d[i, j, 1] + myc.tow_y,
-                               myc.sect_passed_2d[i, j, 2] + myc.tow_z + myc.tow_h]
+                               (myc.sect_passed_2d[i, j, 2] + myc.tow_z
+                                + myc.tow_h)]
 
                     plot_footprint(my_ax,
                                    myc,
@@ -832,15 +844,14 @@ def plot_footprint_hist(my_ax, myc):
                                    myc.sect_passed_2d[i, j, 4],
                                    False)
     else:
-        print(myc.sect_passed_3d.shape)
         for i in range(myc.n_cams):
             for j in range(myc.sect_passed_3d.shape[1]):
                 for k in range(myc.sect_passed_3d.shape[2]):
                     if myc.sect_passed_3d[i][j][k].any():
-                        print(myc.sect_passed_3d[i][j][k])
                         cam_pft = [myc.sect_passed_3d[i, j, k, 0] + myc.tow_x,
                                    myc.sect_passed_3d[i, j, k, 1] + myc.tow_y,
-                                   myc.sect_passed_3d[i, j, k, 2] + myc.tow_z + myc.tow_h]
+                                   (myc.sect_passed_3d[i, j, k, 2] + myc.tow_z
+                                    + myc.tow_h)]
 
                         plot_footprint(my_ax,
                                        myc,
@@ -851,7 +862,6 @@ def plot_footprint_hist(my_ax, myc):
                                        True,
                                        myc.sect_passed_3d[i, j, k, 4],
                                        False)
-
     print()
 
 
