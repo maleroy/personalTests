@@ -207,56 +207,6 @@ def main():
                    np.ceil(myc.jib_l), valinit=myc.bldg_y, valstep=1,
                    color=scol, alpha=salp)
 
-    # Defining current sector camera is in
-    p_a, p_b, p_i = get_interval(phi_l, phi_init)
-    phi = np.linspace(p_a, p_b, myc.n_wireframe+1)
-
-    t_a, t_b, t_i = get_interval(theta_l, theta_init)
-    theta = np.linspace(t_a, t_b, myc.n_wireframe+1)
-
-    myc.sect_passed[p_i, t_i] = True
-
-    # Getting its coordinates
-    msh_phi, msh_theta = np.meshgrid(phi, theta)
-    msh_x, msh_y, msh_z = sph2car(r_s, msh_phi, msh_theta)
-    jt_x, jt_y, jt_z = sph2car(r_s, phi_init, theta_init)
-
-    msh_x += myc.tow_x
-    msh_y += myc.tow_y
-    msh_z += myc.tow_z + myc.tow_h
-
-    jt_x += myc.tow_x
-    jt_y += myc.tow_y
-    jt_z += myc.tow_z + myc.tow_h
-
-    jt_p = [jt_x, jt_y, jt_z]
-    msh_p = [msh_x, msh_y, msh_z]
-
-    cam_p = []
-    for i in range(myc.n_cams):
-        p_x, p_y, p_z = sph2car(myc.k_cams[i]*r_s, phi_init, theta_init)
-
-        if (((p_x**2+p_y**2) < myc.cam_center_max_r**2
-             and not p_i == myc.prev_2d_sect[i])):
-            myc.sect_passed_2d[i][p_i] = [p_x, p_y, p_z, phi_init,
-                                          myc.luf_ang_rad]
-            myc.prev_2d_sect[i] = p_i
-
-        if (((p_x**2+p_y**2) < myc.cam_center_max_r**2
-             and not set([p_i, t_i]) == set(myc.prev_3d_sect[i]))):
-            myc.sect_passed_3d[i][p_i][t_i] = [p_x, p_y, p_z, phi_init,
-                                               myc.luf_ang_rad]
-            myc.prev_3d_sect[i] = [p_i, t_i]
-
-        p_x += myc.tow_x
-        p_y += myc.tow_y
-        p_z += myc.tow_z + myc.tow_h
-
-        cam_p.append([p_x, p_y, p_z])
-
-    # Initial plot of the situation
-    plot_all(my_ax, myc, msh_p, cam_p, jt_p, phi_init)
-
     def update_cam_a(val=None):
         myc.cur_cam = int(rcams.value_selected.split()[1]) - 1
         scamk.set_val(myc.k_cams[myc.cur_cam])
