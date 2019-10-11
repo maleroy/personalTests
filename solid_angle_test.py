@@ -517,9 +517,15 @@ def plot_all(my_ax, myc, msh_p, cam_p, jt_p, cur_phi):
     if myc.plot_sect_hist:
         my_ax.plot_wireframe(*msh_p, colors="green")
 
+    ext = 5
     my_ax.plot(
-        [myc.tow_x, myc.tow_x, jt_p[0]], [myc.tow_y, myc.tow_y, jt_p[1]],
-        [myc.tow_z, myc.tow_z+myc.tow_h, jt_p[2]], c="orange")
+        [myc.tow_x+ext, myc.tow_x-ext, myc.tow_x, myc.tow_x-ext, myc.tow_x+ext,
+         myc.tow_x, myc.tow_x, jt_p[0]],
+        [myc.tow_y-ext, myc.tow_y+ext, myc.tow_y, myc.tow_y-ext, myc.tow_y+ext,
+         myc.tow_y, myc.tow_y, jt_p[1]],
+        [myc.tow_z, myc.tow_z, myc.tow_z, myc.tow_z, myc.tow_z, myc.tow_z,
+         myc.tow_z+myc.tow_h, jt_p[2]],
+        c="orange")
 
     if myc.plot_bldg and not myc.bldg_h < 1 and not myc.bldg_w < 1:
         plot_bldg(my_ax, myc)
