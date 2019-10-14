@@ -74,8 +74,8 @@ class Crane(object):
         self.fix_ang_rad = np.radians(self.fix_ang)
 
         # Definining list of sectors
-        self.phi_l = (np.linspace(0., 360., self.n_sect_2d+1) 
-            - 360./(2*self.n_sect_2d))
+        self.phi_l = (np.linspace(0., 360., self.n_sect_2d+1)
+                      - 360./(2*self.n_sect_2d))
         self.theta_l = np.linspace(0., 90., self.n_sect_3d+1)
 
         # FOV characteristics from camera
@@ -161,7 +161,7 @@ def main():
 
     s_u -= s_uk
     axtheta = plt.axes([s_l, s_u, s_w, s_h])
-    sthet = Slider(axtheta, 'Polar angle (theta)', myc.theta_l[0], 
+    sthet = Slider(axtheta, 'Polar angle (theta)', myc.theta_l[0],
                    myc.theta_l[-1], valinit=theta_init, valstep=1, color=scol,
                    alpha=salp)
 
