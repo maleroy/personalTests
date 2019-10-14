@@ -73,6 +73,11 @@ class Crane(object):
         self.luf_ang_rad = np.radians(self.luf_ang)
         self.fix_ang_rad = np.radians(self.fix_ang)
 
+        # Definining list of sectors
+        self.phi_l = (np.linspace(0., 360., self.n_sect_2d+1) 
+            - 360./(2*self.n_sect_2d))
+        self.theta_l = np.linspace(0., 90., self.n_sect_3d+1)
+
         # FOV characteristics from camera
         self.hfov_v = 0.5*45.4
         self.hfov_h = 0.5*64.2
@@ -124,10 +129,6 @@ def main():
             d_conf = yaml.load(stream)
     myc = Crane(d_conf)
 
-    # Definining list of sectors
-    phi_l = np.linspace(0., 360., myc.n_sect_2d+1) - 360./(2*myc.n_sect_2d)
-    theta_l = np.linspace(0., 90., myc.n_sect_3d+1)
-
     # Initial config of camera
     r_s = myc.jib_l
     phi_init = 135  # 90  # 60
@@ -155,13 +156,14 @@ def main():
 
     s_u -= s_uk
     axphi = plt.axes([s_l, s_u, s_w, s_h])
-    sphi = Slider(axphi, 'Azimuthal angle (phi)', phi_l[0], phi_l[-1],
+    sphi = Slider(axphi, 'Azimuthal angle (phi)', myc.phi_l[0], myc.phi_l[-1],
                   valinit=phi_init, valstep=1, color=scol, alpha=salp)
 
     s_u -= s_uk
     axtheta = plt.axes([s_l, s_u, s_w, s_h])
-    sthet = Slider(axtheta, 'Polar angle (theta)', theta_l[0], theta_l[-1],
-                   valinit=theta_init, valstep=1, color=scol, alpha=salp)
+    sthet = Slider(axtheta, 'Polar angle (theta)', myc.theta_l[0], 
+                   myc.theta_l[-1], valinit=theta_init, valstep=1, color=scol,
+                   alpha=salp)
 
     s_u -= s_uk
     axcamk = plt.axes([s_l, s_u, s_w, s_h])
@@ -253,11 +255,11 @@ def main():
 
         # Re-determine current slice / sector and its coordinates
         new_phi = sphi.val
-        p_l, p_r, p_i = get_interval(phi_l, new_phi)
+        p_l, p_r, p_i = get_interval(myc.phi_l, new_phi)
         phi = np.linspace(p_l, p_r, myc.n_wireframe+1)
 
         new_theta = sthet.val
-        t_l, t_r, t_i = get_interval(theta_l, new_theta)
+        t_l, t_r, t_i = get_interval(myc.theta_l, new_theta)
         theta = np.linspace(t_l, t_r, myc.n_wireframe+1)
 
         myc.luf_ang = 90 - new_theta
@@ -536,14 +538,20 @@ def plot_all(my_ax, myc, msh_p, cam_p, jt_p, cur_phi):
     art3d.pathpatch_2d_to_3d(ftpt_lim, z=0, zdir="z")
 
     # Plot cameras
+    tot_area = 0
     for i, item in enumerate(cam_p):
         # Plot current footprint
         sca = False
         if myc.plot_cur_footprint:
-            sca = plot_footprint(my_ax, myc, item, cur_phi, myc.fix_ang_rad[i],
-                                 i, False, colr="g", alp=0.3, sc_size=20)
+            sca, area = plot_footprint(my_ax, myc, item, cur_phi,
+                                       myc.fix_ang_rad[i], i, False, colr="g",
+                                       alp=0.3, sc_size=20)
+            tot_area += area
 
         my_ax.scatter(*item, s=50, c="green" if sca else "red")
+    if myc.plot_cur_footprint:
+        print("Total current footprint area is {:.1f}[m^2]".format(tot_area))
+        print()
 
     # Plot footprint history
     if myc.plot_footprint_hist:
@@ -585,6 +593,7 @@ def plot_footprint(my_ax, myc, cam_p, cur_phi, fix_ang_rad, cam_num, bool_hist,
     # Radial positions at ground considering luffing angle and bracket angle
     p_r_new = p_r_old - delta_h*np.tan(fix_ang_rad-luf_ang_rad)
 
+    area = 0
     sca = np.abs(p_r_new) < myc.cam_center_max_r
     if sca:
         p_r_new_in = p_r_old - delta_h*np.tan(
@@ -641,16 +650,20 @@ def plot_footprint(my_ax, myc, cam_p, cur_phi, fix_ang_rad, cam_num, bool_hist,
         my_ax.scatter(pxs, pys, pzs, s=sc_size, c=colr, alpha=alp)
         my_ax.plot_trisurf(pxs, pys, pzs, color=colr, alpha=alp, shade=False)
 
+        area = get_polygon_area(np.array(pxs[1:]), np.array(pys[1:]), 4)
+
         if bool_hist:
-            print("Area of historical footprint of cam {}: {:.1f}[m^2]".format(
-                cam_num, get_polygon_area(
-                    np.array(pxs[1:]), np.array(pys[1:]), 4)))
+            print("Area of historical footprint of cam {} at [{:.1f}, {:.1f}]"
+                  "[deg], i.e. sector [{}, {}]: {:.1f}[m^2]".format(
+                      cam_num, cur_phi, np.degrees(luf_ang_rad),
+                      get_interval(myc.phi_l, cur_phi)[2],
+                      get_interval(myc.theta_l, np.degrees(luf_ang_rad))[2],
+                      area))
         else:
             print("Area of current footprint for cam {}: {:.1f}[m^2]".format(
-                cam_num, get_polygon_area(
-                    np.array(pxs[1:]), np.array(pys[1:]), 4)))
+                cam_num, area))
 
-    return sca
+    return sca, area
 
 
 def get_polygon_area(x_s, y_s, n_points):
@@ -781,6 +794,7 @@ def plot_footprint_hist(my_ax, myc):
         my_ax (plt figure subplot): Where sectors should be plotted
         myc (Crane): Instance containing all physical parameters and history
     """
+    tot_area = 0
     if myc.hist_2d_only:
         for i in range(myc.n_cams):
             for j in range(myc.sect_passed_2d.shape[1]):
@@ -800,24 +814,31 @@ def plot_footprint_hist(my_ax, myc):
                                    myc.sect_passed_2d[i, j, 4],
                                    False)
     else:
-        for i in range(myc.n_cams):
-            for j in range(myc.sect_passed_3d.shape[1]):
-                for k in range(myc.sect_passed_3d.shape[2]):
-                    if myc.sect_passed_3d[i][j][k].any():
-                        cam_pft = [myc.sect_passed_3d[i, j, k, 0] + myc.tow_x,
-                                   myc.sect_passed_3d[i, j, k, 1] + myc.tow_y,
-                                   (myc.sect_passed_3d[i, j, k, 2] + myc.tow_z
+        for i in range(myc.sect_passed_3d.shape[1]):
+            for j in range(myc.sect_passed_3d.shape[2]):
+                my_bool = False
+                for k in range(myc.n_cams):
+                    if myc.sect_passed_3d[k][i][j].any():
+                        my_bool = True
+                        cam_pft = [myc.sect_passed_3d[k, i, j, 0] + myc.tow_x,
+                                   myc.sect_passed_3d[k, i, j, 1] + myc.tow_y,
+                                   (myc.sect_passed_3d[k, i, j, 2] + myc.tow_z
                                     + myc.tow_h)]
 
-                        plot_footprint(my_ax,
-                                       myc,
-                                       cam_pft,
-                                       myc.sect_passed_3d[i, j, k, 3],
-                                       myc.fix_ang_rad[i],
-                                       i,
-                                       True,
-                                       myc.sect_passed_3d[i, j, k, 4],
-                                       False)
+                        area = plot_footprint(my_ax,
+                                              myc,
+                                              cam_pft,
+                                              myc.sect_passed_3d[k, i, j, 3],
+                                              myc.fix_ang_rad[k],
+                                              k,
+                                              True,
+                                              myc.sect_passed_3d[k, i, j, 4],
+                                              False)[1]
+                        tot_area += area
+                if my_bool:
+                    print()
+        print("Total historical footprint area is {:.1f}[m^2]".format(
+            tot_area))
     print()
 
 
