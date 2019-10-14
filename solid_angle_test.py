@@ -28,6 +28,7 @@ class Crane(object):
             self.tow_z = 0.
             self.tow_h = 43.6  # 60
             self.jib_l = 61.07  # 68
+            self.luf_ang = 85
 
             # Camera characteristics
             self.n_cams = 4
@@ -39,6 +40,8 @@ class Crane(object):
             self.n_sect_2d = 10
             self.n_sect_3d = 4
             self.hist_2d_only = False
+            self.units = 'm'
+            self.pics_per_slice = 3
 
             # Building characteristics
             self.bldg_h = 40
@@ -47,12 +50,20 @@ class Crane(object):
             self.bldg_x = -34
             self.bldg_y = 34
 
+            # Booleans for plot
+            self.plot_bldg = True
+            self.plot_bldg_as_wedge = True
+            self.plot_cur_footprint = True
+            self.plot_footprint_hist = False
+            self.plot_sect_hist = False
+
         else:
             self.tow_x = d_conf.get('crane').get('tow_x')
             self.tow_y = d_conf.get('crane').get('tow_y')
             self.tow_z = d_conf.get('crane').get('tow_z')
             self.tow_h = d_conf.get('crane').get('tow_h')
             self.jib_l = d_conf.get('crane').get('jib_l')
+            self.luf_ang = d_conf.get('crane').get('init_luf_ang')
 
             self.n_cams = d_conf.get('cams').get('n_cams')
             self.k_cams = np.array(d_conf.get('cams').get('k_cams'))/self.jib_l
@@ -62,6 +73,8 @@ class Crane(object):
             self.n_sect_2d = d_conf.get('capture').get('n_sect_2d')
             self.n_sect_3d = d_conf.get('capture').get('n_sect_3d')
             self.hist_2d_only = d_conf.get('capture').get('hist_2d_only')
+            self.units = d_conf.get('capture').get('units')
+            self.pics_per_slice = d_conf.get('capture').get('pics_per_slice')
 
             self.bldg_h = d_conf.get('building').get('bldg_h')
             self.bldg_d = d_conf.get('building').get('bldg_d')
@@ -69,7 +82,16 @@ class Crane(object):
             self.bldg_x = d_conf.get('building').get('bldg_x')
             self.bldg_y = d_conf.get('building').get('bldg_y')
 
-        self.luf_ang = 85
+            # Booleans for plot
+            self.plot_bldg = d_conf.get('plot_bools').get('bldg')
+            self.plot_bldg_as_wedge = d_conf.get('plot_bools').get(
+                'bldg_as_wedge')
+            self.plot_cur_footprint = d_conf.get('plot_bools').get(
+                'cur_footprint')
+            self.plot_footprint_hist = d_conf.get('plot_bools').get(
+                'footprint_hist')
+            self.plot_sect_hist = d_conf.get('plot_bools').get('sect_hist')
+
         self.luf_ang_rad = np.radians(self.luf_ang)
         self.fix_ang_rad = np.radians(self.fix_ang)
 
@@ -96,16 +118,10 @@ class Crane(object):
 
         self.sect_passed_2d = np.zeros((self.n_cams, self.n_sect_2d, 5))
         self.sect_passed_3d = np.zeros(
-            (self.n_cams, self.n_sect_2d, self.n_sect_3d, 5))
+            (self.n_cams, self.n_sect_2d, self.n_sect_3d, self.pics_per_slice,
+             5))
         self.prev_2d_sect = -1*np.ones(self.n_cams)
         self.prev_3d_sect = -1*np.ones((self.n_cams, 2))
-
-        # Booleans for plot
-        self.plot_cur_footprint = True
-        self.plot_footprint_hist = False
-        self.plot_sect_hist = False
-        self.plot_bldg = True
-        self.plot_bldg_as_wedge = True
 
     def clear_sect_passed(self):
         """Clears history of which sectors have already been passed through
@@ -115,7 +131,8 @@ class Crane(object):
 
         self.sect_passed_2d = np.zeros((self.n_cams, self.n_sect_2d, 5))
         self.sect_passed_3d = np.zeros(
-            (self.n_cams, self.n_sect_2d, self.n_sect_3d, 5))
+            (self.n_cams, self.n_sect_2d, self.n_sect_3d, self.pics_per_slice,
+             5))
         self.prev_2d_sect = -1*np.ones(self.n_cams)
         self.prev_3d_sect = -1*np.ones((self.n_cams, 2))
 
@@ -131,7 +148,8 @@ def main():
 
     # Initial config of camera
     r_s = myc.jib_l
-    phi_init = 135  # 90  # 60
+    phi_init = (
+        d_conf.get('crane').get('init_az_ang') if d_conf != {} else 135)
     theta_init = 90-myc.luf_ang  # 33.75
 
     s_w = 0.15
@@ -219,12 +237,14 @@ def main():
         old_val = myc.k_cams[myc.cur_cam]
         myc.k_cams[myc.cur_cam] = scamk.val
         for i in range(myc.n_sect_2d):
-            myc.sect_passed_2d[myc.cur_cam][i][:3] = (
-                scamk.val * myc.sect_passed_2d[myc.cur_cam][i][:3]/old_val)
+            myc.sect_passed_2d[myc.cur_cam, i, :3] = (
+                scamk.val * myc.sect_passed_2d[myc.cur_cam, i, :3]/old_val)
             for j in range(myc.n_sect_3d):
-                myc.sect_passed_3d[myc.cur_cam][i][j][:3] = (
-                    scamk.val * (
-                        myc.sect_passed_3d[myc.cur_cam][i][j][:3]/old_val))
+                for k in range(myc.pics_per_slice):
+                    myc.sect_passed_3d[myc.cur_cam, i, j, k, :3] = (
+                        scamk.val * (
+                            myc.sect_passed_3d[
+                                myc.cur_cam, i, j, k, :3]/old_val))
         update()
 
     def update_cam_f(val=None):
@@ -243,7 +263,7 @@ def main():
 
         my_ax.text2D(
             0.1, 0.24, ('(' + str(round(myc.k_cams[myc.cur_cam]*myc.jib_l, 2))
-                        + '[m])'),
+                        + '[' + myc.units + '])'),
             ma="right", transform=my_ax.transAxes)
 
         myc.bldg_h = sbldh.val
@@ -290,15 +310,22 @@ def main():
 
             if (((p_x**2+p_y**2) < myc.cam_center_max_r**2
                  and not p_i == myc.prev_2d_sect[i])):
-                myc.sect_passed_2d[i][p_i] = [p_x, p_y, p_z, new_phi,
+                myc.sect_passed_2d[i, p_i] = [p_x, p_y, p_z, new_phi,
                                               myc.luf_ang_rad]
                 myc.prev_2d_sect[i] = p_i
 
             if (((p_x**2+p_y**2) < myc.cam_center_max_r**2
                  and not set([p_i, t_i]) == set(myc.prev_3d_sect[i]))):
-                myc.sect_passed_3d[i][p_i][t_i] = [p_x, p_y, p_z, new_phi,
-                                                   myc.luf_ang_rad]
                 myc.prev_3d_sect[i] = [p_i, t_i]
+                ctr = -1
+                for j in range(myc.pics_per_slice):
+                    if not myc.sect_passed_3d[i, p_i, t_i, j].any():
+                        ctr = j
+                        break
+                if ctr != -1:
+                    myc.sect_passed_3d[i, p_i, t_i, ctr] = [p_x, p_y, p_z,
+                                                            new_phi,
+                                                            myc.luf_ang_rad]
 
             p_x += myc.tow_x
             p_y += myc.tow_y
@@ -338,14 +365,16 @@ def main():
         """
         if event.key == 'right':  # Azimuth increase
             k_mul = 5
-            if sphi.val == sphi.valmax:
-                sphi.set_val(sphi.valmin+sphi.valstep*k_mul)
+            if sphi.val + sphi.valstep*k_mul > sphi.valmax:
+                sphi.set_val(
+                    sphi.valmin + sphi.val + sphi.valstep*k_mul - sphi.valmax)
             else:
                 check_slider_min_max(sphi, mul=k_mul)
         elif event.key == 'left':  # Azimuth decrease
             k_mul = 5
-            if sphi.val == sphi.valmin:
-                sphi.set_val(sphi.valmax-sphi.valstep*k_mul)
+            if sphi.val - sphi.valstep*k_mul < sphi.valmin:
+                sphi.set_val(
+                    sphi.valmax + sphi.val - sphi.valstep*k_mul - sphi.valmin)
             else:
                 check_slider_min_max(sphi, '-', k_mul)
 
@@ -550,7 +579,8 @@ def plot_all(my_ax, myc, msh_p, cam_p, jt_p, cur_phi):
 
         my_ax.scatter(*item, s=50, c="green" if sca else "red")
     if myc.plot_cur_footprint:
-        print("Total current footprint area is {:.1f}[m^2]".format(tot_area))
+        print("Total current footprint area is {:.1f}[{}^2]".format(
+            tot_area, myc.units))
         print()
 
     # Plot footprint history
@@ -562,7 +592,7 @@ def plot_all(my_ax, myc, msh_p, cam_p, jt_p, cur_phi):
 
 
 def plot_footprint(my_ax, myc, cam_p, cur_phi, fix_ang_rad, cam_num, bool_hist,
-                   luf_ang_rad=None, draw_trace=True, colr="black", alp=0.1,
+                   luf_ang_rad=None, draw_trace=True, colr="black", alp=0.05,
                    sc_size=10):
     """Plots the footprint of a single camera
 
@@ -654,14 +684,14 @@ def plot_footprint(my_ax, myc, cam_p, cur_phi, fix_ang_rad, cam_num, bool_hist,
 
         if bool_hist:
             print("Area of historical footprint of cam {} at [{:.1f}, {:.1f}]"
-                  "[deg], i.e. sector [{}, {}]: {:.1f}[m^2]".format(
+                  "[deg], i.e. sector [{}, {}]: {:.1f}[{}^2]".format(
                       cam_num, cur_phi, np.degrees(luf_ang_rad),
                       get_interval(myc.phi_l, cur_phi)[2],
                       get_interval(myc.theta_l, np.degrees(luf_ang_rad))[2],
-                      area))
+                      area, myc.units))
         else:
-            print("Area of current footprint for cam {}: {:.1f}[m^2]".format(
-                cam_num, area))
+            print("Area of current footprint for cam {}: {:.1f}[{}^2]".format(
+                cam_num, area, myc.units))
 
     return sca, area
 
@@ -798,7 +828,7 @@ def plot_footprint_hist(my_ax, myc):
     if myc.hist_2d_only:
         for i in range(myc.n_cams):
             for j in range(myc.sect_passed_2d.shape[1]):
-                if myc.sect_passed_2d[i][j].any():
+                if myc.sect_passed_2d[i, j].any():
                     cam_pft = [myc.sect_passed_2d[i, j, 0] + myc.tow_x,
                                myc.sect_passed_2d[i, j, 1] + myc.tow_y,
                                (myc.sect_passed_2d[i, j, 2] + myc.tow_z
@@ -818,27 +848,30 @@ def plot_footprint_hist(my_ax, myc):
             for j in range(myc.sect_passed_3d.shape[2]):
                 my_bool = False
                 for k in range(myc.n_cams):
-                    if myc.sect_passed_3d[k][i][j].any():
-                        my_bool = True
-                        cam_pft = [myc.sect_passed_3d[k, i, j, 0] + myc.tow_x,
-                                   myc.sect_passed_3d[k, i, j, 1] + myc.tow_y,
-                                   (myc.sect_passed_3d[k, i, j, 2] + myc.tow_z
-                                    + myc.tow_h)]
+                    for l in range(myc.pics_per_slice):
+                        if myc.sect_passed_3d[k, i, j, l].any():
+                            my_bool = True
+                            cam_pft = [
+                                myc.sect_passed_3d[k, i, j, l, 0] + myc.tow_x,
+                                myc.sect_passed_3d[k, i, j, l, 1] + myc.tow_y,
+                                (myc.sect_passed_3d[k, i, j, l, 2] + myc.tow_z
+                                 + myc.tow_h)]
 
-                        area = plot_footprint(my_ax,
-                                              myc,
-                                              cam_pft,
-                                              myc.sect_passed_3d[k, i, j, 3],
-                                              myc.fix_ang_rad[k],
-                                              k,
-                                              True,
-                                              myc.sect_passed_3d[k, i, j, 4],
-                                              False)[1]
-                        tot_area += area
-                if my_bool:
-                    print()
-        print("Total historical footprint area is {:.1f}[m^2]".format(
-            tot_area))
+                            area = plot_footprint(
+                                my_ax,
+                                myc,
+                                cam_pft,
+                                myc.sect_passed_3d[k, i, j, l, 3],
+                                myc.fix_ang_rad[k],
+                                k,
+                                True,
+                                myc.sect_passed_3d[k, i, j, l, 4],
+                                False)[1]
+                            tot_area += area
+                    if my_bool:
+                        print()
+        print("Total historical footprint area is {:.1f}[{}^2]".format(
+            tot_area, myc.units))
     print()
 
 
