@@ -176,6 +176,7 @@ def main():
     axphi = plt.axes([s_l, s_u, s_w, s_h])
     sphi = Slider(axphi, 'Azimuthal angle (phi)', myc.phi_l[0], myc.phi_l[-1],
                   valinit=phi_init, valstep=1, color=scol, alpha=salp)
+    sphi.set_val(phi_init)  # Sometimes valinit does not work, forcing it
 
     s_u -= s_uk
     axtheta = plt.axes([s_l, s_u, s_w, s_h])
