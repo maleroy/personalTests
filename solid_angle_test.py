@@ -123,6 +123,15 @@ class Crane(object):
         self.prev_2d_sect = -1*np.ones(self.n_cams)
         self.prev_3d_sect = -1*np.ones((self.n_cams, 2))
 
+        self.cam_focal_length = 10.6   # [mm]
+        self.cam_sensor_width = 12.75  # [mm]
+        self.cam_sensor_height = 8.5   # [mm]
+        self.cam_image_width = 5472    # [pxl]
+        self.cam_image_height = 3648   # [pxl]
+
+        self.min_gsd = -1
+        self.max_gsd = -1
+
     def clear_sect_passed(self):
         """Clears history of which sectors have already been passed through
         """
@@ -135,6 +144,37 @@ class Crane(object):
              5))
         self.prev_2d_sect = -1*np.ones(self.n_cams)
         self.prev_3d_sect = -1*np.ones((self.n_cams, 2))
+
+    def get_gsd(self, pxlh):
+        """Returns the GSD value based on pixel height and camera parameters
+
+        Args:
+            pxlh (float): pixel height in [-]
+            unit (string): unit of pxlh. Defaults to 'm'
+
+        Returns:
+            [float]: GSD in [cm/pxl]
+        """
+        if self.units == 'm':
+            k_unit = 100
+        elif self.units == 'cm':
+            k_unit = 1
+        elif self.units == 'in':
+            k_unit = 2.54
+        else:
+            print("GSD unit error. Returning [0, 0]")
+            return [0, 0]
+
+        return [(self.cam_sensor_width*pxlh*k_unit)/(
+            self.cam_focal_length*self.cam_image_width),
+                (self.cam_sensor_height*pxlh*k_unit)/(
+                    self.cam_focal_length*self.cam_image_height)]
+
+    def reset_gsd(self):
+        """Resets GSD values
+        """
+        self.min_gsd = -1
+        self.max_gsd = -1
 
 
 def main():
@@ -863,14 +903,47 @@ def plot_footprint(my_ax, myc, cam_p, cur_phi, fix_ang_rad, cam_num, bool_hist,
 
         area = get_polygon_area(np.array(pxs[1:]), np.array(pys[1:]), 4)
 
+        pxlhi = np.sqrt(
+            (cam_p[0] - p_r_new_in_x)**2
+            + (cam_p[1] - p_r_new_in_y)**2
+            + (cam_p[2] - myc.bldg_h)**2)
+
+        pxlhm = np.sqrt(
+            (cam_p[0] - p_r_new_x)**2
+            + (cam_p[1] - p_r_new_y)**2
+            + (cam_p[2] - myc.bldg_h)**2)
+
+        pxlho = np.sqrt(
+            (cam_p[0] - p_r_new_out_x)**2
+            + (cam_p[1] - p_r_new_out_y)**2
+            + (cam_p[2] - myc.bldg_h)**2)
+
+        idxgsd = 0
+        gsdi = myc.get_gsd(pxlhi)[idxgsd]
+        gsdm = myc.get_gsd(pxlhm)[idxgsd]
+        gsdo = myc.get_gsd(pxlho)[idxgsd]
+
+        gsds = sorted([gsdi, gsdm, gsdo])
+
+        if myc.max_gsd == -1 and myc.min_gsd == -1:
+            myc.min_gsd = gsds[0]
+            myc.max_gsd = gsds[2]
+
+        else:
+            if gsds[0] < myc.min_gsd:
+                myc.min_gsd = gsds[0]
+            if gsds[2] > myc.max_gsd:
+                myc.max_gsd = gsds[2]
+
         if bool_hist:
             print("Area of historical footprint of cam {} at [{:+6.1f}, "
                   "{:+6.1f}][deg], i.e. sector [{:2d}, {:2d}]: "
-                  "{:+9.1f}[{}^2]".format(
+                  "{:+9.1f}[{}^2] & its inner/mid/furthest GSDs are {:4.2f}, "
+                  "{:4.2f}, {:4.2f}[cm/pxl] respectively".format(
                       cam_num, cur_phi, np.degrees(luf_ang_rad),
                       get_interval(myc.phi_l, cur_phi)[2],
                       get_interval(myc.theta_l, 90-np.degrees(luf_ang_rad))[2],
-                      area, myc.units))
+                      area, myc.units, gsdi, gsdm, gsdo))
         else:
             print("Area of current footprint for cam {}: {:.1f}[{}^2]".format(
                 cam_num, area, myc.units))
@@ -885,6 +958,7 @@ def plot_footprint_hist(my_ax, myc):
         my_ax (plt figure subplot): Where sectors should be plotted
         myc (Crane): Instance containing all physical parameters and history
     """
+    myc.reset_gsd()
     tot_area = 0
     if myc.hist_2d_only:
         for i in range(myc.n_cams):
@@ -928,8 +1002,9 @@ def plot_footprint_hist(my_ax, myc):
                                 False)[1]
                             tot_area += area
             print()
-        print("Total historical footprint area is {:+.1f}[{}^2]".format(
-            tot_area, myc.units))
+        print("Total historical footprint area is {:+.1f}[{}^2], and its min "
+              "GSD is {:4.2f} and its max GSD is {:4.2f}".format(
+                  tot_area, myc.units, myc.min_gsd, myc.max_gsd))
     print()
 
 
