@@ -26,8 +26,8 @@ class Crane(object):
             self.tow_x = 0.
             self.tow_y = 0.
             self.tow_z = 0.
-            self.tow_h = 43.6  # 60
-            self.jib_l = 61.07  # 68
+            self.tow_h = 43.6
+            self.jib_l = 61.07
             self.luf_ang = 85
 
             # Camera characteristics
@@ -150,7 +150,7 @@ def main():
     r_s = myc.jib_l
     phi_init = (
         d_conf.get('crane').get('init_az_ang') if d_conf != {} else 135)
-    theta_init = 90-myc.luf_ang  # 33.75
+    theta_init = 90-myc.luf_ang
 
     s_w = 0.15
     s_h = 0.01
