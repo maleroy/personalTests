@@ -439,14 +439,14 @@ def main():
         elif event.key == 'alt+h':  # Toggles between wedge and polygon bldg
             hide_show_plot(myc, "myc.plot_bldg_as_wedge")
 
-        elif event.key == 't':  # Go to top view
+        elif event.key == 'T':  # Go to top view
             my_ax.view_init(90, 0)
             update()
-        elif event.key == 'f':  # Go to front view
+        elif event.key == 'F':  # Go to front view
             my_ax.view_init(0, 0)
             update()
-        elif event.key == 'o':  # Go to orthogonal view
-            my_ax.view_init(45, 0)
+        elif event.key == 'O':  # Go to orthogonal view
+            my_ax.view_init(45, 45)
             update()
 
         # Change current cam (for sliders) with keyboard numbers 1 to 9
@@ -684,11 +684,12 @@ def plot_footprint(my_ax, myc, cam_p, cur_phi, fix_ang_rad, cam_num, bool_hist,
         area = get_polygon_area(np.array(pxs[1:]), np.array(pys[1:]), 4)
 
         if bool_hist:
-            print("Area of historical footprint of cam {} at [{:.1f}, {:.1f}]"
-                  "[deg], i.e. sector [{}, {}]: {:.1f}[{}^2]".format(
+            print("Area of historical footprint of cam {} at [{:+6.1f}, "
+                  "{:+6.1f}][deg], i.e. sector [{:2d}, {:2d}]: "
+                  "{:+9.1f}[{}^2]".format(
                       cam_num, cur_phi, np.degrees(luf_ang_rad),
                       get_interval(myc.phi_l, cur_phi)[2],
-                      get_interval(myc.theta_l, np.degrees(luf_ang_rad))[2],
+                      get_interval(myc.theta_l, 90-np.degrees(luf_ang_rad))[2],
                       area, myc.units))
         else:
             print("Area of current footprint for cam {}: {:.1f}[{}^2]".format(
@@ -845,33 +846,30 @@ def plot_footprint_hist(my_ax, myc):
                                    myc.sect_passed_2d[i, j, 4],
                                    False)
     else:
-        for i in range(myc.sect_passed_3d.shape[1]):
-            for j in range(myc.sect_passed_3d.shape[2]):
-                my_bool = False
-                for k in range(myc.n_cams):
+        for i in range(myc.n_cams):
+            for j in range(myc.n_sect_2d):
+                for k in range(myc.n_sect_3d):
                     for l in range(myc.pics_per_slice):
-                        if myc.sect_passed_3d[k, i, j, l].any():
-                            my_bool = True
+                        if myc.sect_passed_3d[i, j, k, l].any():
                             cam_pft = [
-                                myc.sect_passed_3d[k, i, j, l, 0] + myc.tow_x,
-                                myc.sect_passed_3d[k, i, j, l, 1] + myc.tow_y,
-                                (myc.sect_passed_3d[k, i, j, l, 2] + myc.tow_z
+                                myc.sect_passed_3d[i, j, k, l, 0] + myc.tow_x,
+                                myc.sect_passed_3d[i, j, k, l, 1] + myc.tow_y,
+                                (myc.sect_passed_3d[i, j, k, l, 2] + myc.tow_z
                                  + myc.tow_h)]
 
                             area = plot_footprint(
                                 my_ax,
                                 myc,
                                 cam_pft,
-                                myc.sect_passed_3d[k, i, j, l, 3],
-                                myc.fix_ang_rad[k],
-                                k,
+                                myc.sect_passed_3d[i, j, k, l, 3],
+                                myc.fix_ang_rad[i],
+                                i,
                                 True,
-                                myc.sect_passed_3d[k, i, j, l, 4],
+                                myc.sect_passed_3d[i, j, k, l, 4],
                                 False)[1]
                             tot_area += area
-                    if my_bool:
-                        print()
-        print("Total historical footprint area is {:.1f}[{}^2]".format(
+            print()
+        print("Total historical footprint area is {:+.1f}[{}^2]".format(
             tot_area, myc.units))
     print()
 
