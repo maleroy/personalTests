@@ -339,24 +339,6 @@ def main():
         set_axes_equal(my_ax, myc)
         fig.canvas.draw_idle()
 
-    # Initial update now that everything is set up
-    update()
-
-    rcams.on_clicked(update_cam_a)
-    sphi.on_changed(update)
-    sthet.on_changed(update)
-    scamk.on_changed(update_cam_k)
-    sfix.on_changed(update_cam_f)
-    sbldh.on_changed(update)
-    sbldd.on_changed(update)
-    sbldw.on_changed(update)
-    sbldx.on_changed(update)
-    sbldy.on_changed(update)
-    smaxd.on_changed(update)
-
-    my_ax.view_init(45, 0)
-    set_axes_equal(my_ax, myc)
-
     # Handles keyboard events
     def press(event):
         """Handles keyboard events
@@ -491,6 +473,24 @@ def main():
         exec(plot_bool + " = not " + plot_bool)
         update()
 
+    # Initial update now that everything is set up
+    update()
+
+    rcams.on_clicked(update_cam_a)
+    sphi.on_changed(update)
+    sthet.on_changed(update)
+    scamk.on_changed(update_cam_k)
+    sfix.on_changed(update_cam_f)
+    sbldh.on_changed(update)
+    sbldd.on_changed(update)
+    sbldw.on_changed(update)
+    sbldx.on_changed(update)
+    sbldy.on_changed(update)
+    smaxd.on_changed(update)
+
+    my_ax.view_init(45, 0)
+    set_axes_equal(my_ax, myc)
+
     fig.canvas.mpl_connect('key_press_event', press)
 
     mng = plt.get_current_fig_manager()
@@ -531,6 +531,86 @@ def get_interval(lst, val):
             return lst[i], lst[i+1], i
     print("Error")
     sys.exit()
+
+
+def get_polygon_area(x_s, y_s, n_points):
+    """Computes the area of a polygon made of n_points
+
+    Args:
+        x_s (list): Array of polygon's points' x coordinates
+        y_s (list): Array of polygon's points' y coordinates
+        n_points (int): Number of points the polygon has
+
+    Returns:
+        float: Polygon are
+    """
+    area = 0.0
+    idx = n_points-1
+
+    for i in range(n_points):
+        area += (x_s[idx]+x_s[i])*(y_s[idx]-y_s[i])
+        idx = i
+
+    return np.abs(0.5*area)
+
+
+def set_axes_equal(my_ax, myc):
+    """Make axes of 3D plot have equal scale so that spheres appear as spheres,
+    cubes as cubes, etc..  This is one possible solution to Matplotlib's
+    my_ax.set_aspect('equal') and my_ax.axis('equal') not working for 3D.
+
+    Args
+        my_ax (plt figure subplot): Where sectors should be plotted
+        myc (Crane): Instance containing all physical parameters and history
+    """
+    my_ax.set_xlabel('X axis')
+    my_ax.set_ylabel('Y axis')
+    my_ax.set_zlabel('Z axis')
+    b_b = 1.5*myc.jib_l
+    my_ax.set_xlim3d([myc.tow_x-b_b, myc.tow_x+b_b])
+    my_ax.set_ylim3d([myc.tow_y-b_b, myc.tow_y+b_b])
+    my_ax.set_zlim3d([myc.tow_z, myc.tow_z+myc.tow_h+b_b])
+    my_ax.set_aspect('equal')
+
+    x_limits = my_ax.get_xlim3d()
+    y_limits = my_ax.get_ylim3d()
+    z_limits = my_ax.get_zlim3d()
+
+    x_range = abs(x_limits[1] - x_limits[0])
+    x_middle = np.mean(x_limits)
+    y_range = abs(y_limits[1] - y_limits[0])
+    y_middle = np.mean(y_limits)
+    z_range = abs(z_limits[1] - z_limits[0])
+    z_middle = np.mean(z_limits)
+
+    # The plot bounding box is a sphere in the sense of the infinity
+    # norm, hence I call half the max range the plot radius.
+    plot_radius = 0.5*max([x_range, y_range, z_range])
+
+    my_ax.set_xlim3d([x_middle - plot_radius, x_middle + plot_radius])
+    my_ax.set_ylim3d([y_middle - plot_radius, y_middle + plot_radius])
+    my_ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
+
+    my_ax.text2D(1.32, 0.65, "Keyboard commands", fontweight="bold",
+                 ma="right", transform=my_ax.transAxes)
+    my_ax.text2D(1, 0.10,
+                 """left/right: modify azimuthal angle
+                 up/down: modify polar angle
+                 Y/X: modify selected cam\'s relative position
+                 y/x: modify selected cam\'s fixed bracket angle
+                 v/b: modify max tower-cam footprint distance
+                 n/m: modify building height
+                 ctrl+n/ctrl+m: modify building\'s distance from tower
+                 alt+n/alt+m: modify building\'s width
+                 h: toggle current footprint
+                 H: toggle sector history
+                 j: toggle footprint history
+                 ctrl+h: toggle building
+                 alt+h: toggle building shape
+                 ctrl+alt+h: toggle building center location""",
+                 linespacing=3,
+                 ma="right",
+                 transform=my_ax.transAxes)
 
 
 def plot_all(my_ax, myc, msh_p, cam_p, jt_p, cur_phi):
@@ -590,6 +670,106 @@ def plot_all(my_ax, myc, msh_p, cam_p, jt_p, cur_phi):
 
     set_axes_equal(my_ax, myc)
     print()
+
+
+def plot_bldg(my_ax, myc):
+    """Plots the building next to the crane
+
+    Args:
+        my_ax (plt figure subplot): Where sectors should be plotted
+        myc (Crane): Instance containing all physical parameters and history
+    """
+    if myc.plot_bldg_as_wedge:
+        rad = 0.5*np.linspace(myc.bldg_d, myc.bldg_d + myc.bldg_w, 2)
+        phi = np.linspace(0, 2*np.pi, 50)
+        alt = np.linspace(0, myc.bldg_h, 2)
+
+        r_msh, p_msh = np.meshgrid(rad, phi)
+        alt_zero = np.zeros(r_msh.shape)
+        alt_high = myc.bldg_h*np.ones(r_msh.shape)
+
+        p_wall, z_wall = np.meshgrid(phi, alt)
+        rad_in = 0.5*myc.bldg_d*np.ones(p_wall.shape)
+        rad_out = 0.5*(myc.bldg_d+myc.bldg_w)*np.ones(p_wall.shape)
+
+        x_flat = myc.tow_x + r_msh*np.cos(p_msh) + myc.bldg_x
+        y_flat = myc.tow_y + r_msh*np.sin(p_msh) + myc.bldg_y
+
+        x_in = myc.tow_x + rad_in*np.cos(p_wall) + myc.bldg_x
+        y_in = myc.tow_y + rad_in*np.sin(p_wall) + myc.bldg_y
+
+        x_out = myc.tow_x + rad_out*np.cos(p_wall) + myc.bldg_x
+        y_out = myc.tow_y + rad_out*np.sin(p_wall) + myc.bldg_y
+
+        my_ax.plot_surface(x_flat, y_flat, alt_zero, color="b", alpha=0.1,
+                           rcount=1, ccount=1, lw=0, antialiased=False)
+        my_ax.plot_surface(x_flat, y_flat, alt_high, color="b", alpha=0.1,
+                           rcount=1, ccount=1, lw=0, antialiased=False)
+        my_ax.plot_surface(x_in, y_in, z_wall, color="b", alpha=0.1,
+                           rcount=1, ccount=10, lw=0, antialiased=False)
+        my_ax.plot_surface(x_out, y_out, z_wall, color="b", alpha=0.1,
+                           rcount=1, ccount=10, lw=0, antialiased=False)
+
+    else:
+        x_1 = myc.tow_x - 0.5*myc.bldg_w + myc.bldg_x
+        x_2 = myc.tow_x + 0.5*myc.bldg_w + myc.bldg_x
+        y_1 = myc.tow_y - 0.5*myc.bldg_w + myc.bldg_y
+        y_2 = myc.tow_y + 0.5*myc.bldg_w + myc.bldg_y
+
+        z_1 = 0
+        z_2 = myc.bldg_h
+
+        x_a = [x_1, x_2]
+        y_a = [y_1, y_2]
+        z_a = [z_1, z_2]
+
+        x_1, y_1 = np.meshgrid(x_a, y_a)
+        x_2, z_2 = np.meshgrid(x_a, z_a)
+        y_3, z_3 = np.meshgrid(y_a, z_a)
+
+        s_1 = [x_1, y_1, np.ones(x_1.shape)*z_a[0]]
+        s_2 = [x_1, y_1, np.ones(x_1.shape)*z_a[-1]]
+        s_3 = [x_2, np.ones(x_2.shape)*y_a[0], z_2]
+        s_4 = [x_2, np.ones(x_2.shape)*y_a[-1], z_2]
+        s_5 = [np.ones(y_3.shape)*x_a[0], y_3, z_3]
+        s_6 = [np.ones(y_3.shape)*x_a[-1], y_3, z_3]
+        s_s = [s_1, s_2, s_3, s_4, s_5, s_6]
+
+        # Plot the surface.
+        for item in s_s:
+            my_ax.plot_surface(*item, color="b", alpha=0.1, rcount=1, ccount=1,
+                               lw=0, antialiased=False)
+
+
+def plot_sect_hist(my_ax, myc):
+    """Plots all sectors that have already been passed
+
+    Args:
+        my_ax (plt figure subplot): Where sectors should be plotted
+        myc (Crane): Instance containing all physical parameters and history
+    """
+    for i in range(myc.sect_passed.shape[0]):
+        for j in range(myc.sect_passed.shape[1]):
+            if myc.sect_passed[i, j]:
+                old_phi = np.linspace(
+                    i*myc.i_sect_2d - 360./(2*myc.n_sect_2d),
+                    (i+1)*myc.i_sect_2d - 360./(2*myc.n_sect_2d),
+                    myc.n_wireframe+1)
+                old_theta = np.linspace(
+                    j*myc.i_sect_3d,
+                    (j+1)*myc.i_sect_3d,
+                    myc.n_wireframe+1)
+                old_msh_phi, old_msh_theta = np.meshgrid(
+                    old_phi, old_theta)
+                msh_x, msh_y, msh_z = sph2car(
+                    myc.jib_l, old_msh_phi, old_msh_theta)
+
+                msh_x += myc.tow_x
+                msh_y += myc.tow_y
+                msh_z += myc.tow_z + myc.tow_h
+
+                my_ax.plot_surface(
+                    msh_x, msh_y, msh_z, color="blue", alpha=0.1)
 
 
 def plot_footprint(my_ax, myc, cam_p, cur_phi, fix_ang_rad, cam_num, bool_hist,
@@ -698,127 +878,6 @@ def plot_footprint(my_ax, myc, cam_p, cur_phi, fix_ang_rad, cam_num, bool_hist,
     return sca, area
 
 
-def get_polygon_area(x_s, y_s, n_points):
-    """Computes the area of a polygon made of n_points
-
-    Args:
-        x_s (list): Array of polygon's points' x coordinates
-        y_s (list): Array of polygon's points' y coordinates
-        n_points (int): Number of points the polygon has
-
-    Returns:
-        float: Polygon are
-    """
-    area = 0.0
-    idx = n_points-1
-
-    for i in range(n_points):
-        area += (x_s[idx]+x_s[i])*(y_s[idx]-y_s[i])
-        idx = i
-
-    return np.abs(0.5*area)
-
-
-def plot_bldg(my_ax, myc):
-    """Plots the building next to the crane
-
-    Args:
-        my_ax (plt figure subplot): Where sectors should be plotted
-        myc (Crane): Instance containing all physical parameters and history
-    """
-    if myc.plot_bldg_as_wedge:
-        rad = 0.5*np.linspace(myc.bldg_d, myc.bldg_d + myc.bldg_w, 2)
-        phi = np.linspace(0, 2*np.pi, 50)
-        alt = np.linspace(0, myc.bldg_h, 2)
-
-        r_msh, p_msh = np.meshgrid(rad, phi)
-        alt_zero = np.zeros(r_msh.shape)
-        alt_high = myc.bldg_h*np.ones(r_msh.shape)
-
-        p_wall, z_wall = np.meshgrid(phi, alt)
-        rad_in = 0.5*myc.bldg_d*np.ones(p_wall.shape)
-        rad_out = 0.5*(myc.bldg_d+myc.bldg_w)*np.ones(p_wall.shape)
-
-        x_flat = myc.tow_x + r_msh*np.cos(p_msh) + myc.bldg_x
-        y_flat = myc.tow_y + r_msh*np.sin(p_msh) + myc.bldg_y
-
-        x_in = myc.tow_x + rad_in*np.cos(p_wall) + myc.bldg_x
-        y_in = myc.tow_y + rad_in*np.sin(p_wall) + myc.bldg_y
-
-        x_out = myc.tow_x + rad_out*np.cos(p_wall) + myc.bldg_x
-        y_out = myc.tow_y + rad_out*np.sin(p_wall) + myc.bldg_y
-
-        my_ax.plot_surface(x_flat, y_flat, alt_zero, color="b", alpha=0.1,
-                           rcount=1, ccount=1, lw=0, antialiased=False)
-        my_ax.plot_surface(x_flat, y_flat, alt_high, color="b", alpha=0.1,
-                           rcount=1, ccount=1, lw=0, antialiased=False)
-        my_ax.plot_surface(x_in, y_in, z_wall, color="b", alpha=0.1,
-                           rcount=1, ccount=10, lw=0, antialiased=False)
-        my_ax.plot_surface(x_out, y_out, z_wall, color="b", alpha=0.1,
-                           rcount=1, ccount=10, lw=0, antialiased=False)
-
-    else:
-        x_1 = myc.tow_x - 0.5*myc.bldg_w + myc.bldg_x
-        x_2 = myc.tow_x + 0.5*myc.bldg_w + myc.bldg_x
-        y_1 = myc.tow_y - 0.5*myc.bldg_w + myc.bldg_y
-        y_2 = myc.tow_y + 0.5*myc.bldg_w + myc.bldg_y
-
-        z_1 = 0
-        z_2 = myc.bldg_h
-
-        x_a = [x_1, x_2]
-        y_a = [y_1, y_2]
-        z_a = [z_1, z_2]
-
-        x_1, y_1 = np.meshgrid(x_a, y_a)
-        x_2, z_2 = np.meshgrid(x_a, z_a)
-        y_3, z_3 = np.meshgrid(y_a, z_a)
-
-        s_1 = [x_1, y_1, np.ones(x_1.shape)*z_a[0]]
-        s_2 = [x_1, y_1, np.ones(x_1.shape)*z_a[-1]]
-        s_3 = [x_2, np.ones(x_2.shape)*y_a[0], z_2]
-        s_4 = [x_2, np.ones(x_2.shape)*y_a[-1], z_2]
-        s_5 = [np.ones(y_3.shape)*x_a[0], y_3, z_3]
-        s_6 = [np.ones(y_3.shape)*x_a[-1], y_3, z_3]
-        s_s = [s_1, s_2, s_3, s_4, s_5, s_6]
-
-        # Plot the surface.
-        for item in s_s:
-            my_ax.plot_surface(*item, color="b", alpha=0.1, rcount=1, ccount=1,
-                               lw=0, antialiased=False)
-
-
-def plot_sect_hist(my_ax, myc):
-    """Plots all sectors that have already been passed
-
-    Args:
-        my_ax (plt figure subplot): Where sectors should be plotted
-        myc (Crane): Instance containing all physical parameters and history
-    """
-    for i in range(myc.sect_passed.shape[0]):
-        for j in range(myc.sect_passed.shape[1]):
-            if myc.sect_passed[i, j]:
-                old_phi = np.linspace(
-                    i*myc.i_sect_2d - 360./(2*myc.n_sect_2d),
-                    (i+1)*myc.i_sect_2d - 360./(2*myc.n_sect_2d),
-                    myc.n_wireframe+1)
-                old_theta = np.linspace(
-                    j*myc.i_sect_3d,
-                    (j+1)*myc.i_sect_3d,
-                    myc.n_wireframe+1)
-                old_msh_phi, old_msh_theta = np.meshgrid(
-                    old_phi, old_theta)
-                msh_x, msh_y, msh_z = sph2car(
-                    myc.jib_l, old_msh_phi, old_msh_theta)
-
-                msh_x += myc.tow_x
-                msh_y += myc.tow_y
-                msh_z += myc.tow_z + myc.tow_h
-
-                my_ax.plot_surface(
-                    msh_x, msh_y, msh_z, color="blue", alpha=0.1)
-
-
 def plot_footprint_hist(my_ax, myc):
     """Plots the cam footprints on sectors that have already been passed over
 
@@ -872,65 +931,6 @@ def plot_footprint_hist(my_ax, myc):
         print("Total historical footprint area is {:+.1f}[{}^2]".format(
             tot_area, myc.units))
     print()
-
-
-def set_axes_equal(my_ax, myc):
-    """Make axes of 3D plot have equal scale so that spheres appear as spheres,
-    cubes as cubes, etc..  This is one possible solution to Matplotlib's
-    my_ax.set_aspect('equal') and my_ax.axis('equal') not working for 3D.
-
-    Args
-        my_ax (plt figure subplot): Where sectors should be plotted
-        myc (Crane): Instance containing all physical parameters and history
-    """
-    my_ax.set_xlabel('X axis')
-    my_ax.set_ylabel('Y axis')
-    my_ax.set_zlabel('Z axis')
-    b_b = 1.5*myc.jib_l
-    my_ax.set_xlim3d([myc.tow_x-b_b, myc.tow_x+b_b])
-    my_ax.set_ylim3d([myc.tow_y-b_b, myc.tow_y+b_b])
-    my_ax.set_zlim3d([myc.tow_z, myc.tow_z+myc.tow_h+b_b])
-    my_ax.set_aspect('equal')
-
-    x_limits = my_ax.get_xlim3d()
-    y_limits = my_ax.get_ylim3d()
-    z_limits = my_ax.get_zlim3d()
-
-    x_range = abs(x_limits[1] - x_limits[0])
-    x_middle = np.mean(x_limits)
-    y_range = abs(y_limits[1] - y_limits[0])
-    y_middle = np.mean(y_limits)
-    z_range = abs(z_limits[1] - z_limits[0])
-    z_middle = np.mean(z_limits)
-
-    # The plot bounding box is a sphere in the sense of the infinity
-    # norm, hence I call half the max range the plot radius.
-    plot_radius = 0.5*max([x_range, y_range, z_range])
-
-    my_ax.set_xlim3d([x_middle - plot_radius, x_middle + plot_radius])
-    my_ax.set_ylim3d([y_middle - plot_radius, y_middle + plot_radius])
-    my_ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
-
-    my_ax.text2D(1.32, 0.65, "Keyboard commands", fontweight="bold",
-                 ma="right", transform=my_ax.transAxes)
-    my_ax.text2D(1, 0.10,
-                 """left/right: modify azimuthal angle
-                 up/down: modify polar angle
-                 Y/X: modify selected cam\'s relative position
-                 y/x: modify selected cam\'s fixed bracket angle
-                 v/b: modify max tower-cam footprint distance
-                 n/m: modify building height
-                 ctrl+n/ctrl+m: modify building\'s distance from tower
-                 alt+n/alt+m: modify building\'s width
-                 h: toggle current footprint
-                 H: toggle sector history
-                 j: toggle footprint history
-                 ctrl+h: toggle building
-                 alt+h: toggle building shape
-                 ctrl+alt+h: toggle building center location""",
-                 linespacing=3,
-                 ma="right",
-                 transform=my_ax.transAxes)
 
 
 if __name__ == '__main__':
