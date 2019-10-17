@@ -42,6 +42,10 @@ class Crane(object):
             self.hist_2d_only = False
             self.units = 'm'
             self.pics_per_slice = 3
+            self.bool_k_gsd = True
+            self.k_gsd = 2
+            self.og_min_gsd = -1
+            self.og_max_gsd = -1
 
             # Building characteristics
             self.bldg_h = 40
@@ -75,6 +79,14 @@ class Crane(object):
             self.hist_2d_only = d_conf.get('capture').get('hist_2d_only')
             self.units = d_conf.get('capture').get('units')
             self.pics_per_slice = d_conf.get('capture').get('pics_per_slice')
+            self.bool_k_gsd = d_conf.get('capture').get('bool_k_gsd')
+            self.k_gsd = d_conf.get('capture').get('k_gsd')
+            if self.bool_k_gsd:
+                self.og_min_gsd = -1
+                self.og_max_gsd = -1
+            else:
+                self.og_min_gsd = d_conf.get('capture').get('og_min_gsd')
+                self.og_max_gsd = d_conf.get('capture').get('og_max_gsd')
 
             self.bldg_h = d_conf.get('building').get('bldg_h')
             self.bldg_d = d_conf.get('building').get('bldg_d')
@@ -129,8 +141,13 @@ class Crane(object):
         self.cam_image_width = 5472    # [pxl]
         self.cam_image_height = 3648   # [pxl]
 
-        self.min_gsd = -1
-        self.max_gsd = -1
+        self.idxgsd = 0  # 0 for using width, 1 for height
+        if self.bool_k_gsd:
+            self.min_gsd = -1
+            self.max_gsd = -1
+        else:
+            self.min_gsd = d_conf.get('capture').get('og_min_gsd')
+            self.max_gsd = d_conf.get('capture').get('og_max_gsd')
 
     def clear_sect_passed(self):
         """Clears history of which sectors have already been passed through
@@ -144,6 +161,7 @@ class Crane(object):
              5))
         self.prev_2d_sect = -1*np.ones(self.n_cams)
         self.prev_3d_sect = -1*np.ones((self.n_cams, 2))
+        self.reset_gsd()
 
     def get_gsd(self, pxlh):
         """Returns the GSD value based on pixel height and camera parameters
@@ -162,8 +180,8 @@ class Crane(object):
         elif self.units == 'in':
             k_unit = 2.54
         else:
-            print("GSD unit error. Returning [0, 0]")
-            return [0, 0]
+            print("GSD unit error. Returning [-1, -1]")
+            return [-1, -1]
 
         return [(self.cam_sensor_width*pxlh*k_unit)/(
             self.cam_focal_length*self.cam_image_width),
@@ -173,8 +191,64 @@ class Crane(object):
     def reset_gsd(self):
         """Resets GSD values
         """
-        self.min_gsd = -1
-        self.max_gsd = -1
+        self.min_gsd = self.og_min_gsd
+        self.max_gsd = self.og_max_gsd
+
+    def are_gsds_valid(self, cam_num, gsds):
+        """Determines if GSD difference is ok (must be within a factor of 2)
+
+        Args:
+            cam_num (int): camera we are checking
+            gsds (list of floats): GSDs sorted from smallest to largest
+
+        Returns:
+            bool: are the GSDs valid?
+        """
+        if self.bool_k_gsd:
+            if self.min_gsd == -1 and self.max_gsd == -1:
+                if gsds[2]/gsds[0] <= self.k_gsd:
+                    self.min_gsd = gsds[0]
+                    self.max_gsd = gsds[2]
+                    return True
+                else:
+                    return False
+
+            if ((self.max_gsd/gsds[0] >= self.k_gsd
+                 or gsds[2]/self.min_gsd >= self.k_gsd)):
+                if self.max_gsd/gsds[0] >= self.k_gsd:
+                    print("GSD problem at cam {}: gsds[0]({:.2f}), max_gsd("
+                          "{:.2f}), ratio {}".upper().format(
+                              cam_num, gsds[0], self.max_gsd,
+                              self.max_gsd/gsds[0]))
+
+                elif gsds[2]/self.min_gsd >= self.k_gsd:
+                    print("GSD problem at cam {}: gsds[2]({:.2f}), min_gsd("
+                          "{:.2f}), ratio {}".upper().format(
+                              cam_num, gsds[2], self.min_gsd,
+                              gsds[2]/self.min_gsd))
+                else:
+                    print("UNKNOWN GSD ERROR")
+                return False
+            return True
+        else:
+            return set(
+                [self.min_gsd <= i <= self.max_gsd for i in gsds]) == set(
+                    len(gsds)*[True])
+
+    def upd_corner_gsds(self, gsds):
+        """Changes boundary GSDs (either min or max or both)
+
+        Args:
+            gsds (list of floats): GSDs sorted from smallest to largest
+        """
+        if gsds[0] < self.min_gsd:
+            print("Changing min from {} to {}".format(self.min_gsd, gsds[0]))
+            self.min_gsd = gsds[0]
+        if gsds[2] > self.max_gsd:
+            print("Changing max from {} to {}".format(self.max_gsd, gsds[2]))
+            self.max_gsd = gsds[2]
+        print("New corner GSDs are {:.2f} and {:.2f}[cm/pxl]".format(
+            self.min_gsd, self.max_gsd))
 
 
 def main():
@@ -238,7 +312,7 @@ def main():
     s_u -= s_uk
     axmaxd = plt.axes([s_l, s_u, s_w, s_h])
     smaxd = Slider(axmaxd, 'Maximum distance from center', 0,
-                   2*myc.jib_l//10*10, valinit=1.1*myc.jib_l//10*10, valstep=5,
+                   2*myc.jib_l//10*10, valinit=myc.cam_center_max_r, valstep=5,
                    color=scol, alpha=salp)
 
     s_u -= s_uk
@@ -349,28 +423,47 @@ def main():
         for i in range(myc.n_cams):
             p_x, p_y, p_z = sph2car(myc.k_cams[i]*r_s, new_phi, new_theta)
 
-            if (((p_x**2+p_y**2) < myc.cam_center_max_r**2
-                 and not p_i == myc.prev_2d_sect[i])):
-                myc.sect_passed_2d[i, p_i] = [p_x, p_y, p_z, new_phi,
-                                              myc.luf_ang_rad]
-                myc.prev_2d_sect[i] = p_i
-
-            if (((p_x**2+p_y**2) < myc.cam_center_max_r**2
-                 and not set([p_i, t_i]) == set(myc.prev_3d_sect[i]))):
-                myc.prev_3d_sect[i] = [p_i, t_i]
-                ctr = -1
-                for j in range(myc.pics_per_slice):
-                    if not myc.sect_passed_3d[i, p_i, t_i, j].any():
-                        ctr = j
-                        break
-                if ctr != -1:
-                    myc.sect_passed_3d[i, p_i, t_i, ctr] = [p_x, p_y, p_z,
-                                                            new_phi,
-                                                            myc.luf_ang_rad]
-
             p_x += myc.tow_x
             p_y += myc.tow_y
             p_z += myc.tow_z + myc.tow_h
+
+            p_rs = get_footprint_radial_coords(
+                myc, p_x, p_y, p_z, new_phi, myc.fix_ang_rad[i],
+                myc.luf_ang_rad)
+            gsds = get_sorted_gsds(myc, p_x, p_y, p_z, p_rs)
+
+            gsds_valid = myc.are_gsds_valid(i, gsds)
+            if gsds_valid:
+                print("Maybe updating corner GSDs with those from cam {} "
+                      "([{}, {}, {}])".format(i, *[round(i, 2) for i in gsds]))
+                myc.upd_corner_gsds(gsds)
+
+            if myc.hist_2d_only:
+                if ((gsds_valid
+                     and not p_i == myc.prev_2d_sect[i])):
+                    myc.sect_passed_2d[i, p_i] = [p_x, p_y, p_z, new_phi,
+                                                  myc.luf_ang_rad]
+                    myc.prev_2d_sect[i] = p_i
+
+            else:
+                if ((gsds_valid
+                     and not set([p_i, t_i]) == set(myc.prev_3d_sect[i]))):
+                    # print("maybe changing sect_passed_3d".upper())
+                    ctr = -1
+                    for j in range(myc.pics_per_slice):
+                        if not myc.sect_passed_3d[i, p_i, t_i, j].any():
+                            ctr = j
+                            break
+                    if ctr != -1:
+                        myc.prev_3d_sect[i] = [p_i, t_i]
+                        myc.sect_passed_3d[
+                            i, p_i, t_i, ctr] = [
+                                p_x, p_y, p_z,
+                                new_phi,
+                                myc.luf_ang_rad]
+                        print("A new pic was taken by cam {} at sector [{}, "
+                              "{}] (#{}/{})\n".format(
+                                  i, p_i, t_i, ctr+1, myc.pics_per_slice))
 
             cam_p.append([p_x, p_y, p_z])
 
@@ -594,6 +687,118 @@ def get_polygon_area(x_s, y_s, n_points):
     return np.abs(0.5*area)
 
 
+def get_footprint_corner_coords(myc, p_rs, p_z, phi):
+    """Computes the cartesian coordinates of the footprint points
+
+    Args:
+        myc (Crane): current crane
+        p_rs (list of 6 floats): (x, y) coords of center, closest and furthest
+        p_z (float): current camera x position
+        phi (float): current azimuthal angle in [deg]
+
+    Returns:
+        list of 8 floats: (x, y) coords of footprint corners (ll, ul, ur, lr)
+    """
+    delta_h = p_z - myc.bldg_h  # Diff between camera z and gnd
+    delta_t = delta_h*np.tan(np.radians(myc.hfov_h))  # Tangential difference
+
+    phi_rad = np.radians(phi)
+
+    # Deducing edge corners' positions
+    p_t_x_ll = p_rs[2] - delta_t*np.sin(phi_rad)
+    p_t_y_ll = p_rs[3] + delta_t*np.cos(phi_rad)
+
+    p_t_x_ul = p_rs[4] - delta_t*np.sin(phi_rad)
+    p_t_y_ul = p_rs[5] + delta_t*np.cos(phi_rad)
+
+    p_t_x_ur = p_rs[4] + delta_t*np.sin(phi_rad)
+    p_t_y_ur = p_rs[5] - delta_t*np.cos(phi_rad)
+
+    p_t_x_lr = p_rs[2] + delta_t*np.sin(phi_rad)
+    p_t_y_lr = p_rs[3] - delta_t*np.cos(phi_rad)
+
+    return [p_t_x_ll, p_t_y_ll,
+            p_t_x_ul, p_t_y_ul,
+            p_t_x_ur, p_t_y_ur,
+            p_t_x_lr, p_t_y_lr]
+
+
+def get_footprint_radial_coords(myc, p_x, p_y, p_z, phi, fix_ang_rad,
+                                luf_ang_rad):
+    """Computes the cartesian coordinates of the footprint points
+
+    Args:
+        myc (Crane): current crane
+        p_x (float): current camera x position
+        p_y (float): current camera y position
+        p_z (float): current camera z position
+        phi (float): current azimuthal angle in [deg]
+        fix_ang_rad (float): Bracket angle [rad]
+        luf_ang_rad (float): Luffing angle [rad]
+
+    Returns:
+        list of 6 floats: (x, y) coords of center, closest and furthest
+    """
+    p_r_old = np.sqrt(p_x**2 + p_y**2)
+
+    delta_h = p_z - myc.bldg_h  # Diff between camera z and gnd
+
+    p_r_new = p_r_old - delta_h*np.tan(
+        fix_ang_rad-luf_ang_rad)
+    p_r_new_in = p_r_old - delta_h*np.tan(
+        fix_ang_rad+np.radians(myc.hfov_v)-luf_ang_rad)
+    p_r_new_out = p_r_old - delta_h*np.tan(
+        fix_ang_rad-np.radians(myc.hfov_v)-luf_ang_rad)
+
+    # Converting them to cartesian coordinates
+    phi_rad = np.radians(phi)
+    p_r_new_x = p_r_new*np.cos(phi_rad)
+    p_r_new_y = p_r_new*np.sin(phi_rad)
+    p_r_new_in_x = p_r_new_in*np.cos(phi_rad)
+    p_r_new_in_y = p_r_new_in*np.sin(phi_rad)
+    p_r_new_out_x = p_r_new_out*np.cos(phi_rad)
+    p_r_new_out_y = p_r_new_out*np.sin(phi_rad)
+
+    return [p_r_new_x, p_r_new_y,
+            p_r_new_in_x, p_r_new_in_y,
+            p_r_new_out_x, p_r_new_out_y]
+
+
+def get_sorted_gsds(myc, p_x, p_y, p_z, p_rs):
+    """Computes GSDs based on current camera position and current bldg height
+
+    Args:
+        myc (Crane): current crane
+        p_x (float): current camera x position
+        p_y (float): current camera y position
+        p_z (float): current camera z position
+        p_rs (list of floats): (x, y) coords center, closest and furthest
+
+    Returns:
+        (list of floats): GSDs sorted from smallest to largest
+    """
+    pxlhi = np.sqrt(
+        (p_x - p_rs[2])**2
+        + (p_y - p_rs[3])**2
+        + (p_z - myc.bldg_h)**2)
+
+    pxlhm = np.sqrt(
+        (p_x - p_rs[0])**2
+        + (p_y - p_rs[1])**2
+        + (p_z - myc.bldg_h)**2)
+
+    pxlho = np.sqrt(
+        (p_x - p_rs[4])**2
+        + (p_y - p_rs[5])**2
+        + (p_z - myc.bldg_h)**2)
+
+    gsdi = myc.get_gsd(pxlhi)[myc.idxgsd]
+    gsdm = myc.get_gsd(pxlhm)[myc.idxgsd]
+    gsdo = myc.get_gsd(pxlho)[myc.idxgsd]
+
+    return sorted([gsdi, gsdm, gsdo])
+
+
 def set_axes_equal(my_ax, myc):
     """Make axes of 3D plot have equal scale so that spheres appear as spheres,
     cubes as cubes, etc..  This is one possible solution to Matplotlib's
@@ -696,9 +901,10 @@ def plot_all(my_ax, myc, msh_p, cam_p, jt_p, cur_phi):
             sca, area = plot_footprint(my_ax, myc, item, cur_phi,
                                        myc.fix_ang_rad[i], i, False, colr="g",
                                        alp=0.3, sc_size=20)
-            tot_area += area
-
+            if sca:
+                tot_area += area
         my_ax.scatter(*item, s=50, c="green" if sca else "red")
+
     if myc.plot_cur_footprint:
         print("Total current footprint area is {:.1f}[{}^2]".format(
             tot_area, myc.units))
@@ -835,120 +1041,63 @@ def plot_footprint(my_ax, myc, cam_p, cur_phi, fix_ang_rad, cam_num, bool_hist,
     if luf_ang_rad is None:
         luf_ang_rad = myc.luf_ang_rad
 
-    delta_h = cam_p[2] - myc.bldg_h  # Difference between camera z and gnd
-    # delta_r = delta_h*np.tan(np.radians(myc.hfov_v))  # Radial difference
-    delta_t = delta_h*np.tan(np.radians(myc.hfov_h))  # Tangential difference
+    p_rs = get_footprint_radial_coords(
+        myc, cam_p[0], cam_p[1], cam_p[2], cur_phi, fix_ang_rad, luf_ang_rad)
 
-    p_r_old = np.sqrt(cam_p[0]**2+cam_p[1]**2)  # Radial position
+    p_ts = get_footprint_corner_coords(myc, p_rs, cam_p[2], cur_phi)
 
-    # Radial positions at ground considering luffing angle and bracket angle
-    p_r_new = p_r_old - delta_h*np.tan(fix_ang_rad-luf_ang_rad)
+    pxs = [p_rs[0], p_ts[0], p_ts[2], p_ts[4], p_ts[6]]
+    pys = [p_rs[1], p_ts[1], p_ts[3], p_ts[5], p_ts[7]]
+    pzs = 5*[myc.bldg_h]
 
-    area = 0
-    sca = np.abs(p_r_new) < myc.cam_center_max_r
-    if sca:
-        p_r_new_in = p_r_old - delta_h*np.tan(
-            fix_ang_rad+np.radians(myc.hfov_v)-luf_ang_rad)
-        p_r_new_out = p_r_old - delta_h*np.tan(
-            fix_ang_rad-np.radians(myc.hfov_v)-luf_ang_rad)
+    area = get_polygon_area(np.array(pxs[1:]), np.array(pys[1:]), 4)
+    gsds = get_sorted_gsds(myc, cam_p[0], cam_p[1], cam_p[2], p_rs)
 
-        # Converting them to cartesian coordinates
-        cur_phi_rad = np.radians(cur_phi)
-        p_r_new_x = p_r_new*np.cos(cur_phi_rad)
-        p_r_new_y = p_r_new*np.sin(cur_phi_rad)
-        p_r_new_in_x = p_r_new_in*np.cos(cur_phi_rad)
-        p_r_new_in_y = p_r_new_in*np.sin(cur_phi_rad)
-        p_r_new_out_x = p_r_new_out*np.cos(cur_phi_rad)
-        p_r_new_out_y = p_r_new_out*np.sin(cur_phi_rad)
+    # print("plot_footprint, cam {}, min_gsd {}, max_gsd {}, gsds {}".format(
+    #     cam_num, myc.min_gsd, myc.max_gsd, gsds))
 
-        # Deducing edge corners' positions
-        p_t_x_ll = p_r_new_in_x - delta_t*np.sin(cur_phi_rad)
-        p_t_y_ll = p_r_new_in_y + delta_t*np.cos(cur_phi_rad)
+    if not myc.are_gsds_valid(cam_num, gsds):
+        return False, 0.0
+    # print("Seems like GSDs are valid, let us continue then")
 
-        p_t_x_ul = p_r_new_out_x - delta_t*np.sin(cur_phi_rad)
-        p_t_y_ul = p_r_new_out_y + delta_t*np.cos(cur_phi_rad)
+    if bool_hist:
+        print("Area of historical footprint of cam {} at [{:+6.1f}, "
+              "{:+6.1f}][deg], i.e. sector [{:2d}, {:2d}]: "
+              "{:+9.1f}[{}^2] & its inner/mid/furthest GSDs are {:4.2f}, "
+              "{:4.2f}, {:4.2f}[cm/pxl] respectively".format(
+                  cam_num, cur_phi, np.degrees(luf_ang_rad),
+                  get_interval(myc.phi_l, cur_phi)[2],
+                  get_interval(myc.theta_l, 90-np.degrees(luf_ang_rad))[2],
+                  area, myc.units, gsds[0], gsds[1], gsds[2]))
+    else:
+        print("Area of current footprint for cam {}: {:8.1f}[{}^2] (GSDs are "
+              "[{:.2f}, {:.2f}, {:.2f}][cm/pxl] respectively)".format(
+                  cam_num, area, myc.units, *[round(i, 2) for i in gsds]))
 
-        p_t_x_lr = p_r_new_in_x + delta_t*np.sin(cur_phi_rad)
-        p_t_y_lr = p_r_new_in_y - delta_t*np.cos(cur_phi_rad)
+    # Draw FOV's pyramid-like shape from camera to footprint
+    if draw_trace:
+        my_ax.plot([cam_p[0], p_ts[0]],
+                   [cam_p[1], p_ts[1]],
+                   [cam_p[2], myc.bldg_h],
+                   color=colr, alpha=alp)
+        my_ax.plot([cam_p[0], p_ts[2]],
+                   [cam_p[1], p_ts[3]],
+                   [cam_p[2], myc.bldg_h],
+                   color=colr, alpha=alp)
+        my_ax.plot([cam_p[0], p_ts[4]],
+                   [cam_p[1], p_ts[5]],
+                   [cam_p[2], myc.bldg_h],
+                   color=colr, alpha=alp)
+        my_ax.plot([cam_p[0], p_ts[6]],
+                   [cam_p[1], p_ts[7]],
+                   [cam_p[2], myc.bldg_h],
+                   color=colr, alpha=alp)
 
-        p_t_x_ur = p_r_new_out_x + delta_t*np.sin(cur_phi_rad)
-        p_t_y_ur = p_r_new_out_y - delta_t*np.cos(cur_phi_rad)
+    # Draw edges + center point then cover it with a patch
+    my_ax.scatter(pxs, pys, pzs, s=sc_size, c=colr, alpha=alp)
+    my_ax.plot_trisurf(pxs, pys, pzs, color=colr, alpha=alp, shade=False)
 
-        pxs = [p_r_new_x, p_t_x_ll, p_t_x_ul, p_t_x_ur, p_t_x_lr]
-        pys = [p_r_new_y, p_t_y_ll, p_t_y_ul, p_t_y_ur, p_t_y_lr]
-        pzs = 5*[myc.bldg_h]
-
-        # Draw FOV's pyramid-like shape from camera to footprint
-        if draw_trace:
-            my_ax.plot([cam_p[0], p_t_x_ll],
-                       [cam_p[1], p_t_y_ll],
-                       [cam_p[2], myc.bldg_h],
-                       color=colr, alpha=alp)
-            my_ax.plot([cam_p[0], p_t_x_lr],
-                       [cam_p[1], p_t_y_lr],
-                       [cam_p[2], myc.bldg_h],
-                       color=colr, alpha=alp)
-            my_ax.plot([cam_p[0], p_t_x_ul],
-                       [cam_p[1], p_t_y_ul],
-                       [cam_p[2], myc.bldg_h],
-                       color=colr, alpha=alp)
-            my_ax.plot([cam_p[0], p_t_x_ur],
-                       [cam_p[1], p_t_y_ur],
-                       [cam_p[2], myc.bldg_h],
-                       color=colr, alpha=alp)
-
-        # Draw edges + center point then cover it with a patch
-        my_ax.scatter(pxs, pys, pzs, s=sc_size, c=colr, alpha=alp)
-        my_ax.plot_trisurf(pxs, pys, pzs, color=colr, alpha=alp, shade=False)
-
-        area = get_polygon_area(np.array(pxs[1:]), np.array(pys[1:]), 4)
-
-        pxlhi = np.sqrt(
-            (cam_p[0] - p_r_new_in_x)**2
-            + (cam_p[1] - p_r_new_in_y)**2
-            + (cam_p[2] - myc.bldg_h)**2)
-
-        pxlhm = np.sqrt(
-            (cam_p[0] - p_r_new_x)**2
-            + (cam_p[1] - p_r_new_y)**2
-            + (cam_p[2] - myc.bldg_h)**2)
-
-        pxlho = np.sqrt(
-            (cam_p[0] - p_r_new_out_x)**2
-            + (cam_p[1] - p_r_new_out_y)**2
-            + (cam_p[2] - myc.bldg_h)**2)
-
-        idxgsd = 0
-        gsdi = myc.get_gsd(pxlhi)[idxgsd]
-        gsdm = myc.get_gsd(pxlhm)[idxgsd]
-        gsdo = myc.get_gsd(pxlho)[idxgsd]
-
-        gsds = sorted([gsdi, gsdm, gsdo])
-
-        if myc.max_gsd == -1 and myc.min_gsd == -1:
-            myc.min_gsd = gsds[0]
-            myc.max_gsd = gsds[2]
-
-        else:
-            if gsds[0] < myc.min_gsd:
-                myc.min_gsd = gsds[0]
-            if gsds[2] > myc.max_gsd:
-                myc.max_gsd = gsds[2]
-
-        if bool_hist:
-            print("Area of historical footprint of cam {} at [{:+6.1f}, "
-                  "{:+6.1f}][deg], i.e. sector [{:2d}, {:2d}]: "
-                  "{:+9.1f}[{}^2] & its inner/mid/furthest GSDs are {:4.2f}, "
-                  "{:4.2f}, {:4.2f}[cm/pxl] respectively".format(
-                      cam_num, cur_phi, np.degrees(luf_ang_rad),
-                      get_interval(myc.phi_l, cur_phi)[2],
-                      get_interval(myc.theta_l, 90-np.degrees(luf_ang_rad))[2],
-                      area, myc.units, gsdi, gsdm, gsdo))
-        else:
-            print("Area of current footprint for cam {}: {:.1f}[{}^2]".format(
-                cam_num, area, myc.units))
-
-    return sca, area
+    return True, area
 
 
 def plot_footprint_hist(my_ax, myc):
@@ -958,16 +1107,15 @@ def plot_footprint_hist(my_ax, myc):
         my_ax (plt figure subplot): Where sectors should be plotted
         myc (Crane): Instance containing all physical parameters and history
     """
-    myc.reset_gsd()
+    # myc.reset_gsd()
     tot_area = 0
     if myc.hist_2d_only:
         for i in range(myc.n_cams):
             for j in range(myc.sect_passed_2d.shape[1]):
                 if myc.sect_passed_2d[i, j].any():
-                    cam_pft = [myc.sect_passed_2d[i, j, 0] + myc.tow_x,
-                               myc.sect_passed_2d[i, j, 1] + myc.tow_y,
-                               (myc.sect_passed_2d[i, j, 2] + myc.tow_z
-                                + myc.tow_h)]
+                    cam_pft = [myc.sect_passed_2d[i, j, 0],
+                               myc.sect_passed_2d[i, j, 1],
+                               myc.sect_passed_2d[i, j, 2]]
 
                     plot_footprint(my_ax,
                                    myc,
@@ -985,10 +1133,9 @@ def plot_footprint_hist(my_ax, myc):
                     for l in range(myc.pics_per_slice):
                         if myc.sect_passed_3d[i, j, k, l].any():
                             cam_pft = [
-                                myc.sect_passed_3d[i, j, k, l, 0] + myc.tow_x,
-                                myc.sect_passed_3d[i, j, k, l, 1] + myc.tow_y,
-                                (myc.sect_passed_3d[i, j, k, l, 2] + myc.tow_z
-                                 + myc.tow_h)]
+                                myc.sect_passed_3d[i, j, k, l, 0],
+                                myc.sect_passed_3d[i, j, k, l, 1],
+                                myc.sect_passed_3d[i, j, k, l, 2]]
 
                             area = plot_footprint(
                                 my_ax,
@@ -1002,9 +1149,14 @@ def plot_footprint_hist(my_ax, myc):
                                 False)[1]
                             tot_area += area
             print()
-        print("Total historical footprint area is {:+.1f}[{}^2], and its min "
-              "GSD is {:4.2f} and its max GSD is {:4.2f}".format(
+        print("Total historical footprint area is {:+.1f}[{}^2], and its min &"
+              " max GSDs are {:4.2f} & {:4.2f}[cm/pxl] respectively".format(
                   tot_area, myc.units, myc.min_gsd, myc.max_gsd))
+        if myc.bool_k_gsd:
+            if myc.max_gsd/myc.min_gsd >= myc.k_gsd:
+                print("Max GSD is thus greater than {} times the min GSD ("
+                      "ratio is {:+5.2f}). Needs to be changed".upper().format(
+                          myc.k_gsd, myc.max_gsd/myc.min_gsd))
     print()
 
 
