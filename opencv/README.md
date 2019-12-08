@@ -1,20 +1,23 @@
-This directory contains the OpenCV Python tutorials found in https://opencv-python-tutroals.readthedocs.io/en/latest/index.html
+# OpenCV
+
+## This directory contains the OpenCV Python tutorials found [here](https://opencv-python-tutroals.readthedocs.io/en/latest/index.html "opencv-python tutorials")
 
 It contains the following:
-    GUI features in OpenCV
+
+    **GUI features in OpenCV**
         Getting Started with Images
         Getting Started with Videos
         Drawing Functions in OpenCV
         Mouse as a Paint-Brush
         Trackbar as the Color Palette
 
-    Core Operations
+    **Core Operations**
         Basic Operations on Images
         Arithmetic Operations on Images
         Performance Measurement and Improvement Techniques
         Mathematical Tools in OpenCV
 
-    Image Processing in OpenCV
+    **Image Processing in OpenCV**
         Changing colorspaces
         Image Thresholding
         Geometric Transformations of Images
@@ -32,7 +35,7 @@ It contains the following:
         Image Segmentation with Watershed Algorithm
         Interactive Foreground Extraction using GrabCut Algorithm
 
-    Feature Detection and Description
+    **Feature Detection and Description**
         Understanding Features
         Harris Corner Detection
         Shi-Tomasi Corner Detector & Good Features to Track
@@ -44,25 +47,25 @@ It contains the following:
         Feature Matching
         Feature Matching + Homography to find Objects
 
-    Video Analysis
+    **Video Analysis**
         Meanshift and Camshift
         Optical Flow
         Background Subtraction
 
-    Camera Calibration and 3D Reconstruction
+    **Camera Calibration and 3D Reconstruction**
         Camera Calibration
         Pose Estimation
         Epipolar Geometry
         Depth Map from Stereo Images
 
-    Machine Learning
+    **Machine Learning**
         K-Nearest Neighbor
         Support Vector Machines (SVM)
         K-Means Clustering
 
-    Computational Photography
+    **Computational Photography**
         Image Denoising
         Image Inpainting
 
-    Object Detection
+    **Object Detection**
         Face Detection using Haar Cascades
